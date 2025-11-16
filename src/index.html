@@ -7,6 +7,154 @@
 </head>
 
 <body>
+    <div id="game-container">
+        <div id="game-board"></div>
+        <div id="mode-toggle-container">
+            <div class="mode-toggle-label">Game Mode</div>
+            <label class="mode-toggle">
+                <input type="checkbox" id="mode-toggle">
+                <span class="toggle-slider">
+                    <span class="toggle-label toggle-label-left">Farmer</span>
+                    <span class="toggle-label toggle-label-right">Player</span>
+                </span>
+            </label>
+            <div id="mode-error-message" class="mode-error-message">
+                Complete the maze first! Add both entrance and exit.
+            </div>
+        </div>
+    </div>
+    <div id="farmer-sidebar">
+        <div id="settings-container">
+            <h3>Maze Settings</h3>
+            <div class="setting-item">
+                <label for="maze-width">Width:</label>
+                <input type="number" id="maze-width" min="7" max="30" value="12">
+            </div>
+            <div class="setting-item">
+                <label for="maze-height">Height:</label>
+                <input type="number" id="maze-height" min="7" max="30" value="12">
+            </div>
+        </div>
+        <div id="stats-container">
+            <h3>Maze Stats</h3>
+            <div class="stat-item">
+                <span class="stat-label">Pathway Plowed:</span>
+                <span class="stat-value" id="total-plowed">0</span>
+            </div>
+            <div class="stat-item hoverable" id="shortest-path-stat">
+                <span class="stat-label">
+                    <i class="fas fa-eye hover-icon"></i> Shortest Path:
+                </span>
+                <span class="stat-value" id="shortest-path">—</span>
+            </div>
+            <div class="stat-item hoverable" id="longest-path-stat">
+                <span class="stat-label">
+                    <i class="fas fa-eye hover-icon"></i> Longest Path:
+                </span>
+                <span class="stat-value" id="longest-path">—</span>
+            </div>
+        </div>
+        <div id="controls-container">
+            <button id="reset-button" class="control-button">
+                <i class="fas fa-redo"></i> Reset (R)
+            </button>
+            <button id="undo-button" class="control-button">
+                <i class="fas fa-undo"></i> Undo (U)
+            </button>
+        </div>
+    </div>
+    <div id="player-sidebar">
+        <div id="player-emoji-container">
+            <div class="emoji-picker">
+                <div class="emoji-picker-row">
+                    <button id="emoji-prev" class="emoji-nav-button">◀</button>
+                    <div id="spawn-emoji" class="spawn-emoji">👨</div>
+                    <button id="emoji-next" class="emoji-nav-button">▶</button>
+                </div>
+                <div id="skin-tone-picker" class="skin-tone-picker">
+                <button class="skin-tone-button" data-tone="" title="Default">🚫</button>
+                <button class="skin-tone-button" data-tone="🏻" data-color="#FFDBAC" title="Light"></button>
+                <button class="skin-tone-button" data-tone="🏼" data-color="#F1C27D" title="Medium-Light"></button>
+                <button class="skin-tone-button" data-tone="🏽" data-color="#E0AC69" title="Medium"></button>
+                <button class="skin-tone-button" data-tone="🏾" data-color="#C68642" title="Medium-Dark"></button>
+                <button class="skin-tone-button" data-tone="🏿" data-color="#8D5524" title="Dark"></button>
+                </div>
+                <button id="randomize-emoji" class="randomize-button" title="Randomize emoji">Random</button>
+            </div>
+        </div>
+        <div id="ai-settings-container">
+            <h3>AI Settings</h3>
+            
+            <div class="ai-setting-item">
+                <label for="speed-slider">Movement Speed:</label>
+                <div class="slider-container">
+                    <input type="range" id="speed-slider" min="0.5" max="10" step="0.5" value="2">
+                    <span class="slider-value" id="speed-value">2/s</span>
+                </div>
+                <div class="slider-labels">
+                    <span>Slow</span>
+                    <span>Fast</span>
+                </div>
+            </div>
+            
+            <div class="ai-setting-item">
+                <label for="right-wall-slider">Right Wall Following:</label>
+                <div class="slider-container">
+                    <input type="range" id="right-wall-slider" min="0" max="1" step="0.01" value="0.5">
+                    <span class="slider-value" id="right-wall-value">Some</span>
+                </div>
+                <div class="slider-labels">
+                    <span>Off</span>
+                    <span>Always</span>
+                </div>
+            </div>
+            
+            <div class="ai-setting-item">
+                <label for="backtracking-slider">Backtracking:</label>
+                <div class="slider-container">
+                    <input type="range" id="backtracking-slider" min="-1" max="1" step="0.01" value="0">
+                    <span class="slider-value" id="backtracking-value">Neutral</span>
+                </div>
+                <div class="slider-labels">
+                    <span>Often</span>
+                    <span>Neutral</span>
+                    <span>Avoid</span>
+                </div>
+            </div>
+            
+            <div class="ai-setting-item">
+                <label for="line-of-sight-slider">Line of Sight:</label>
+                <div class="slider-container">
+                    <input type="range" id="line-of-sight-slider" min="0" max="1" step="0.01" value="0.5">
+                    <span class="slider-value" id="line-of-sight-value">Some</span>
+                </div>
+                <div class="slider-labels">
+                    <span>Off</span>
+                    <span>Always</span>
+                </div>
+            </div>
+            
+            <div class="ai-setting-item">
+                <label for="social-slider">Social:</label>
+                <div class="slider-container">
+                    <input type="range" id="social-slider" min="-1" max="1" step="0.01" value="0">
+                    <span class="slider-value" id="social-value">Neutral</span>
+                </div>
+                <div class="slider-labels">
+                    <span>Avoid</span>
+                    <span>Neutral</span>
+                    <span>Follow</span>
+                </div>
+            </div>
+        </div>
+        <div id="playback-controls-container">
+            <h3>Playback Controls</h3>
+            <div class="playback-buttons">
+                <button id="pause-play-button" class="playback-button">⏸</button>
+                <button id="playback-speed-button" class="playback-button">1x</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
