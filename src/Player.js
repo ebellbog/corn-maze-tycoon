@@ -70,6 +70,7 @@ export default class Player {
                 : possibleMoves;
             
             let nextMove;
+            let needsDecision = false;
             
             // If there's only one forward option (simple turn or straight corridor), take it automatically
             if (forwardMoves.length === 1) {
@@ -78,6 +79,7 @@ export default class Player {
             } else {
                 // Multiple forward options (true intersection) or no forward options (dead end)
                 // Need to make a decision using the AI brain
+                needsDecision = true;
                 const currentPlayerIndex = this.game.players.indexOf(this);
                 const decision = this.brain.decideNextMove(
                     this.position,
@@ -95,22 +97,63 @@ export default class Player {
             }
             
             if (nextMove) {
-                // Move to next position
-                this.position = { x: nextMove.x, y: nextMove.y };
-                this.lastDirection = nextMove.direction;
-                this.path.push({ ...this.position });
-                
-                // Mark as visited and increment visit count
-                const key = `${nextMove.x},${nextMove.y}`;
-                this.visited.add(key);
-                this.visitCounts.set(key, (this.visitCounts.get(key) || 0) + 1);
-                
-                // Re-render game
-                this.game.render();
-                
-                // Schedule next move with game speed multiplier
-                const adjustedSpeed = this.brain.speed / this.game.playbackSpeed;
-                this.moveInterval = setTimeout(move, adjustedSpeed);
+                // If we need to make a decision, pause to "think" before moving
+                if (needsDecision) {
+                    // Show the thought bubble immediately
+                    this.game.render();
+                    
+                    // Pause for thinking (300ms base, scaled by playback speed)
+                    const thinkingDuration = 300 / this.game.playbackSpeed;
+                    
+                    // After thinking, execute the move
+                    this.moveInterval = setTimeout(() => {
+                        // Check if paused or stopped during thinking
+                        if (!this.isActive || this.isFinished || this.isPaused) {
+                            if (this.isPaused) {
+                                // Check again in 100ms if paused
+                                this.moveInterval = setTimeout(move, 100);
+                            }
+                            return;
+                        }
+                        
+                        // Execute the move
+                        this.position = { x: nextMove.x, y: nextMove.y };
+                        this.lastDirection = nextMove.direction;
+                        this.path.push({ ...this.position });
+                        
+                        // Mark as visited and increment visit count
+                        const key = `${nextMove.x},${nextMove.y}`;
+                        this.visited.add(key);
+                        this.visitCounts.set(key, (this.visitCounts.get(key) || 0) + 1);
+                        
+                        // Clear thought after move
+                        this.currentThought = null;
+                        
+                        // Re-render game
+                        this.game.render();
+                        
+                        // Schedule next move with game speed multiplier
+                        const adjustedSpeed = this.brain.speed / this.game.playbackSpeed;
+                        this.moveInterval = setTimeout(move, adjustedSpeed);
+                    }, thinkingDuration);
+                } else {
+                    // No decision needed - move immediately
+                    this.position = { x: nextMove.x, y: nextMove.y };
+                    this.lastDirection = nextMove.direction;
+                    this.path.push({ ...this.position });
+                    
+                    // Mark as visited and increment visit count
+                    const key = `${nextMove.x},${nextMove.y}`;
+                    this.visited.add(key);
+                    this.visitCounts.set(key, (this.visitCounts.get(key) || 0) + 1);
+                    
+                    // Re-render game
+                    this.game.render();
+                    
+                    // Schedule next move with game speed multiplier
+                    const adjustedSpeed = this.brain.speed / this.game.playbackSpeed;
+                    this.moveInterval = setTimeout(move, adjustedSpeed);
+                }
             } else {
                 // No valid moves - player is stuck
                 this.isActive = false;

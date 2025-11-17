@@ -145,6 +145,9 @@ export default class AIBrain {
             if (this.weights.avoidRevisit > 0 && !chosenIsVisited) {
                 thought = '🧠'; // Brain - avoided familiar path
             }
+        } else if (maxWeight < 0.1) {
+            // No heuristic had significant influence - essentially a random choice
+            thought = '🎲'; // Dice - random decision
         }
         
         return { move: bestMove.move, thought };

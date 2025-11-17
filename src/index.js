@@ -27,6 +27,7 @@ class CornMazeGame {
         this.isPaused = false;
         this.isMoving = false; // Track if tractor is currently animating
         this.tractorDirection = 'right'; // Track tractor facing direction
+        this.previousTractorDirection = 'right'; // Track previous direction to detect changes
         
         // Try to load from localStorage first
         const loaded = this.loadFromLocalStorage();
@@ -818,8 +819,8 @@ Social: ${formatSocial(player.brain.weights.social || 0)}`;
             // Save state before making the move
             this.saveState();
             
-            // Update direction for horizontal movement
-            if (direction === 'left' || direction === 'right') {
+            // Update direction for all movements
+            if (direction) {
                 this.tractorDirection = direction;
             }
             
@@ -1098,31 +1099,83 @@ Social: ${formatSocial(player.brain.weights.social || 0)}`;
         
         // Render tractor (in farmer mode)
         if (this.gameMode === 'farmer') {
+            let tractorWrapper = board.find('.tractor-wrapper');
             let tractorEntity = board.find('.entity-tractor');
             
-            if (tractorEntity.length === 0) {
-                // Create tractor entity
+            if (tractorWrapper.length === 0) {
+                // Create wrapper for translation (with transition)
+                // Append to body or a container that won't affect grid layout
+                tractorWrapper = $('<div class="tractor-wrapper"></div>');
+                // Append directly to board but ensure it's absolutely positioned
+                board.append(tractorWrapper);
+                
+                // Create tractor entity for rotation (no transition)
                 tractorEntity = $('<div class="moving-entity entity-tractor"></div>');
                 tractorEntity.text('🚜');
-                board.append(tractorEntity);
+                tractorWrapper.append(tractorEntity);
+            } else {
+                // Get the existing tractor entity from the wrapper
+                tractorEntity = tractorWrapper.find('.entity-tractor');
             }
             
             // Update tractor size and position
             const pos = this.getPixelPosition(this.tractorPosition.x, this.tractorPosition.y);
             
-            // Flip tractor based on direction
-            const scaleX = this.tractorDirection === 'right' ? -1 : 1;
+            // Check if direction changed (rotation should be instant, not animated)
+            const directionChanged = this.tractorDirection !== this.previousTractorDirection;
+            
+            // Update wrapper position (translation - with smooth animation)
+            tractorWrapper.css({
+                width: `${pos.width}px`,
+                height: `${pos.height}px`,
+                transform: `translate(${pos.left}px, ${pos.top}px)`
+            });
+            
+            // Update tractor rotation (instant, no animation)
+            let rotationTransform = '';
+            switch(this.tractorDirection) {
+                case 'left':
+                    // Default orientation - tractor faces left
+                    break;
+                case 'right':
+                    // Flip horizontally to face right
+                    rotationTransform = 'scaleX(-1)';
+                    break;
+                case 'up':
+                    // Rotate clockwise to face up
+                    rotationTransform = 'rotate(90deg)';
+                    break;
+                case 'down':
+                    // Rotate counter-clockwise to face down
+                    rotationTransform = 'rotate(-90deg)';
+                    break;
+            }
+            
+            // Apply rotation instantly (no transition on rotation)
+            if (directionChanged) {
+                // Temporarily disable any transition on the entity
+                tractorEntity.css('transition', 'none');
+            }
             
             tractorEntity.css({
                 width: `${pos.width}px`,
                 height: `${pos.height}px`,
                 fontSize: `${Math.round(cellSize * 0.67)}px`,
-                transform: `translate(${pos.left}px, ${pos.top}px) scaleX(${scaleX})`
+                transform: rotationTransform
             });
-            tractorEntity.show();
+            
+            // Re-enable transition after rotation is applied
+            if (directionChanged) {
+                setTimeout(() => {
+                    tractorEntity.css('transition', '');
+                }, 10);
+                this.previousTractorDirection = this.tractorDirection;
+            }
+            
+            tractorWrapper.show();
         } else {
             // Hide tractor in player mode
-            board.find('.entity-tractor').hide();
+            board.find('.tractor-wrapper').hide();
         }
         
         // Render players (in player mode)
