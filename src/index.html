@@ -97,53 +97,62 @@
                 </div>
             </div>
             
-            <div class="ai-setting-item">
-                <label for="right-wall-slider">Right Wall Following:</label>
-                <div class="slider-container">
-                    <input type="range" id="right-wall-slider" min="0" max="1" step="0.01" value="0.5">
-                    <span class="slider-value" id="right-wall-value">Some</span>
+            <h4 class="tier-section-title">Logic Priority</h4>
+            
+            <div class="priority-tiers">
+                <div class="priority-tier" data-tier="0">
+                    <div class="tier-label">High Priority</div>
+                    <div class="tier-blocks" data-tier-index="0"></div>
                 </div>
-                <div class="slider-labels">
-                    <span>Off</span>
-                    <span>Always</span>
+                
+                <div class="priority-tier" data-tier="1">
+                    <div class="tier-label">Medium Priority</div>
+                    <div class="tier-blocks" data-tier-index="1"></div>
+                </div>
+                
+                <div class="priority-tier" data-tier="2">
+                    <div class="tier-label">Low Priority</div>
+                    <div class="tier-blocks" data-tier-index="2"></div>
                 </div>
             </div>
             
-            <div class="ai-setting-item">
-                <label for="backtracking-slider">Backtracking:</label>
-                <div class="slider-container">
-                    <input type="range" id="backtracking-slider" min="-1" max="1" step="0.01" value="0">
-                    <span class="slider-value" id="backtracking-value">Neutral</span>
+            <h4 class="tier-section-title">Available Logic Blocks</h4>
+            <div id="logic-block-pool">
+                <div class="logic-block toggleable" draggable="true" data-block-type="wallFollowing" data-mode="right">
+                    <div class="block-icon">→</div>
+                    <div class="block-label">Right Wall</div>
+                    <label class="block-toggle">
+                        <input type="checkbox" class="toggle-switch">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <div class="slider-labels">
-                    <span>Often</span>
-                    <span>Neutral</span>
-                    <span>Avoid</span>
+                
+                <div class="logic-block" draggable="true" data-block-type="lineOfSight">
+                    <div class="block-icon">❗</div>
+                    <div class="block-label">Line of Sight</div>
                 </div>
-            </div>
-            
-            <div class="ai-setting-item">
-                <label for="line-of-sight-slider">Line of Sight:</label>
-                <div class="slider-container">
-                    <input type="range" id="line-of-sight-slider" min="0" max="1" step="0.01" value="0.5">
-                    <span class="slider-value" id="line-of-sight-value">Some</span>
+                
+                <div class="logic-block toggleable" draggable="true" data-block-type="backtracking" data-mode="avoid">
+                    <div class="block-icon">🧠</div>
+                    <div class="block-label">Avoid Backtracking</div>
+                    <label class="block-toggle">
+                        <input type="checkbox" class="toggle-switch">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <div class="slider-labels">
-                    <span>Off</span>
-                    <span>Always</span>
+                
+                <div class="logic-block toggleable" draggable="true" data-block-type="social" data-mode="follow">
+                    <div class="block-icon">❤️</div>
+                    <div class="block-label">Follow Others</div>
+                    <label class="block-toggle">
+                        <input type="checkbox" class="toggle-switch">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-            </div>
-            
-            <div class="ai-setting-item">
-                <label for="social-slider">Social:</label>
-                <div class="slider-container">
-                    <input type="range" id="social-slider" min="-1" max="1" step="0.01" value="0">
-                    <span class="slider-value" id="social-value">Neutral</span>
-                </div>
-                <div class="slider-labels">
-                    <span>Avoid</span>
-                    <span>Neutral</span>
-                    <span>Follow</span>
+                
+                <div class="logic-block" draggable="true" data-block-type="randomGuesser">
+                    <div class="block-icon">🎲</div>
+                    <div class="block-label">Random Guesser</div>
                 </div>
             </div>
         </div>
@@ -152,6 +161,7 @@
             <div class="playback-buttons">
                 <button id="pause-play-button" class="playback-button">⏸</button>
                 <button id="playback-speed-button" class="playback-button">1x</button>
+                <button id="clear-players-button" class="playback-button" title="Clear all players">↻</button>
             </div>
         </div>
     </div>

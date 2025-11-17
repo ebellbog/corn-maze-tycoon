@@ -28,6 +28,16 @@ class CornMazeGame {
         this.isMoving = false; // Track if tractor is currently animating
         this.tractorDirection = 'right'; // Track tractor facing direction
         this.previousTractorDirection = 'right'; // Track previous direction to detect changes
+        this.currentTierConfig = [ // Tier configuration for current player being configured
+            { blocks: [] }, // High priority
+            { blocks: [] }, // Medium priority
+            { blocks: [] }  // Low priority
+        ];
+        this.dragState = { // Track drag-and-drop state
+            draggedBlock: null,
+            sourceTier: null,
+            sourceIndex: null
+        };
         
         // Try to load from localStorage first
         const loaded = this.loadFromLocalStorage();
@@ -281,56 +291,8 @@ class CornMazeGame {
         // Initialize skin tone button state
         this.updateSkinToneButtons();
         
-        // Slider updates with snap points
+        // Speed slider
         $('#speed-slider').on('input', () => {
-            this.updatePlayerUI();
-        });
-        
-        $('#right-wall-slider').on('input', (e) => {
-            // Snap to 0, 0.5, 1
-            const value = parseFloat(e.target.value);
-            let snapped;
-            if (value < 0.25) snapped = 0;
-            else if (value < 0.75) snapped = 0.5;
-            else snapped = 1;
-            $(e.target).val(snapped);
-            this.updatePlayerUI();
-        });
-        
-        $('#backtracking-slider').on('input', (e) => {
-            // Snap to -1, -0.5, 0, 0.5, 1
-            const value = parseFloat(e.target.value);
-            let snapped;
-            if (value < -0.75) snapped = -1;
-            else if (value < -0.25) snapped = -0.5;
-            else if (value < 0.25) snapped = 0;
-            else if (value < 0.75) snapped = 0.5;
-            else snapped = 1;
-            $(e.target).val(snapped);
-            this.updatePlayerUI();
-        });
-        
-        $('#line-of-sight-slider').on('input', (e) => {
-            // Snap to 0, 0.5, 1
-            const value = parseFloat(e.target.value);
-            let snapped;
-            if (value < 0.25) snapped = 0;
-            else if (value < 0.75) snapped = 0.5;
-            else snapped = 1;
-            $(e.target).val(snapped);
-            this.updatePlayerUI();
-        });
-        
-        $('#social-slider').on('input', (e) => {
-            // Snap to -1, -0.5, 0, 0.5, 1
-            const value = parseFloat(e.target.value);
-            let snapped;
-            if (value < -0.75) snapped = -1;
-            else if (value < -0.25) snapped = -0.5;
-            else if (value < 0.25) snapped = 0;
-            else if (value < 0.75) snapped = 0.5;
-            else snapped = 1;
-            $(e.target).val(snapped);
             this.updatePlayerUI();
         });
         
@@ -341,6 +303,541 @@ class CornMazeGame {
         
         $('#playback-speed-button').on('click', () => {
             this.cyclePlaybackSpeed();
+        });
+        
+        $('#clear-players-button').on('click', () => {
+            this.stopAllPlayers();
+        });
+        
+        // Setup logic block drag and drop
+        this.setupLogicBlockDragDrop();
+        
+        // Setup sidebar resize
+        this.setupSidebarResize();
+    }
+    
+    setupSidebarResize() {
+        const game = this;
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+        
+        // Create resize grip element
+        const grip = $('<div class="sidebar-resize-grip"></div>');
+        $('body').append(grip);
+        
+        // Function to update grip position
+        const updateGripPosition = () => {
+            const sidebar = $('#player-sidebar:visible, #farmer-sidebar:visible');
+            if (sidebar.length) {
+                const rect = sidebar[0].getBoundingClientRect();
+                const gripHeight = 120;
+                grip.css({
+                    'left': `${rect.left - 18}px`,
+                    'top': `${rect.top + (rect.height / 2) - (gripHeight / 2)}px`
+                });
+                grip.show();
+            } else {
+                grip.hide();
+            }
+        };
+        
+        // Update grip position initially and on window resize/scroll
+        updateGripPosition();
+        $(window).on('resize', updateGripPosition);
+        
+        // Update grip position when sidebar scrolls
+        $('#player-sidebar, #farmer-sidebar').on('scroll', updateGripPosition);
+        
+        // Update grip position when mode changes
+        const originalUpdateMode = this.updateMode.bind(this);
+        this.updateMode = function() {
+            originalUpdateMode();
+            setTimeout(updateGripPosition, 10);
+        };
+        
+        // Handle mousedown on the grip
+        grip.on('mousedown', function(e) {
+            e.preventDefault();
+            const sidebar = $('#player-sidebar:visible, #farmer-sidebar:visible');
+            if (!sidebar.length) return;
+            
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = sidebar.outerWidth();
+            
+            grip.addClass('resizing');
+            $('body').css('cursor', 'ew-resize');
+            $('body').css('user-select', 'none');
+        });
+        
+        $(document).on('mousemove', function(e) {
+            if (!isResizing) return;
+            
+            e.preventDefault();
+            const deltaX = startX - e.clientX; // Reversed because we're dragging from the left
+            const newWidth = Math.max(280, Math.min(600, startWidth + deltaX));
+            
+            const sidebar = $('#player-sidebar:visible, #farmer-sidebar:visible');
+            sidebar.css('width', `${newWidth}px`);
+            updateGripPosition();
+        });
+        
+        $(document).on('mouseup', function() {
+            if (isResizing) {
+                isResizing = false;
+                grip.removeClass('resizing');
+                $('body').css('cursor', '');
+                $('body').css('user-select', '');
+            }
+        });
+    }
+    
+    setupLogicBlockDragDrop() {
+        const game = this;
+        
+        // Handle toggle switches for backtracking and social blocks
+        $(document).on('change', '.logic-block.toggleable .toggle-switch', function(e) {
+            e.stopPropagation(); // Prevent drag initiation
+            const block = $(this).closest('.logic-block');
+            const blockType = block.attr('data-block-type');
+            const isChecked = $(this).prop('checked');
+            
+            if (blockType === 'wallFollowing') {
+                const newMode = isChecked ? 'left' : 'right';
+                const newLabel = isChecked ? 'Left Wall' : 'Right Wall';
+                const newIcon = isChecked ? '←' : '→';
+                block.attr('data-mode', newMode);
+                block.find('.block-label').text(newLabel);
+                block.find('.block-icon').text(newIcon);
+            } else if (blockType === 'backtracking') {
+                const newMode = isChecked ? 'seek' : 'avoid';
+                const newLabel = isChecked ? 'Seek Backtracking' : 'Avoid Backtracking';
+                const newIcon = isChecked ? '❓' : '🧠';
+                block.attr('data-mode', newMode);
+                block.find('.block-label').text(newLabel);
+                block.find('.block-icon').text(newIcon);
+            } else if (blockType === 'social') {
+                const newMode = isChecked ? 'avoid' : 'follow';
+                const newLabel = isChecked ? 'Avoid Others' : 'Follow Others';
+                const newIcon = isChecked ? '🫣' : '❤️';
+                block.attr('data-mode', newMode);
+                block.find('.block-label').text(newLabel);
+                block.find('.block-icon').text(newIcon);
+            }
+            
+            // Update configuration if block is in a tier
+            game.updateTierConfigFromDOM();
+        });
+        
+        // Drag start
+        $(document).on('dragstart', '.logic-block', function(e) {
+            const block = $(this);
+            block.addClass('dragging');
+            
+            // Store drag data
+            const blockType = block.attr('data-block-type');
+            const blockMode = block.attr('data-mode') || null;
+            const isFromPool = block.parent().attr('id') === 'logic-block-pool';
+            
+            game.dragState.draggedBlock = {
+                type: blockType,
+                mode: blockMode,
+                element: block[0]
+            };
+            
+            if (!isFromPool) {
+                // Find which tier and index
+                const tierBlocks = block.parent();
+                const tierIndex = parseInt(tierBlocks.attr('data-tier-index'));
+                const blockIndex = tierBlocks.children('.logic-block').index(block);
+                
+                game.dragState.sourceTier = tierIndex;
+                game.dragState.sourceIndex = blockIndex;
+            } else {
+                game.dragState.sourceTier = null;
+                game.dragState.sourceIndex = null;
+            }
+            
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+            e.originalEvent.dataTransfer.setData('text/html', block.html());
+        });
+        
+        // Drag end
+        $(document).on('dragend', '.logic-block', function(e) {
+            $(this).removeClass('dragging');
+            $('.priority-tier').removeClass('drag-over');
+            game.dragState = {
+                draggedBlock: null,
+                sourceTier: null,
+                sourceIndex: null
+            };
+        });
+        
+        // Drag over tier
+        $(document).on('dragover', '.priority-tier', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $(this).addClass('drag-over');
+            return false;
+        });
+        
+        // Drag leave tier
+        $(document).on('dragleave', '.priority-tier', function(e) {
+            $(this).removeClass('drag-over');
+        });
+        
+        // Drop on tier
+        $(document).on('drop', '.tier-blocks', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const tierBlocks = $(this);
+            const tierIndex = parseInt(tierBlocks.attr('data-tier-index'));
+            tierBlocks.parent().removeClass('drag-over');
+            
+            if (!game.dragState.draggedBlock) return;
+            
+            const { type, mode, element } = game.dragState.draggedBlock;
+            const isFromPool = game.dragState.sourceTier === null;
+            
+            if (isFromPool) {
+                // Remove from pool and add to tier
+                $(element).remove();
+                game.addBlockToTier(tierIndex, type, mode);
+            } else {
+                // Move from another tier
+                game.moveBlockBetweenTiers(game.dragState.sourceTier, game.dragState.sourceIndex, tierIndex);
+            }
+            
+            game.renderTiers();
+            return false;
+        });
+        
+        // Drop on pool (remove block from tier and restore to pool)
+        $(document).on('drop', '#logic-block-pool', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (game.dragState.sourceTier !== null) {
+                // Remove block from tier
+                const { type, mode } = game.dragState.draggedBlock;
+                game.removeBlockFromTier(game.dragState.sourceTier, game.dragState.sourceIndex);
+                
+                // Restore block to pool
+                game.restoreBlockToPool(type, mode);
+                
+                game.renderTiers();
+            }
+            return false;
+        });
+        
+        // Drop outside tiers and pool (remove block entirely)
+        $(document).on('dragover', 'body', function(e) {
+            const target = $(e.target);
+            // Only allow default if NOT over a tier or pool
+            if (!target.closest('.tier-blocks').length && !target.closest('#logic-block-pool').length) {
+                e.preventDefault();
+            }
+        });
+        
+        $(document).on('drop', 'body', function(e) {
+            const target = $(e.target);
+            // Only handle if NOT over a tier or pool
+            if (!target.closest('.tier-blocks').length && !target.closest('#logic-block-pool').length) {
+                e.preventDefault();
+                
+                if (game.dragState.sourceTier !== null) {
+                    // Remove block from tier and restore to pool
+                    const { type, mode } = game.dragState.draggedBlock;
+                    game.removeBlockFromTier(game.dragState.sourceTier, game.dragState.sourceIndex);
+                    game.restoreBlockToPool(type, mode);
+                    game.renderTiers();
+                }
+            }
+        });
+    }
+    
+    addBlockToTier(tierIndex, blockType, mode = null) {
+        const tier = this.currentTierConfig[tierIndex];
+        tier.blocks.push({
+            type: blockType,
+            weight: 1, // Default weight, will be normalized
+            mode: mode
+        });
+        this.normalizeTierWeights(tierIndex);
+    }
+    
+    removeBlockFromTier(tierIndex, blockIndex) {
+        const tier = this.currentTierConfig[tierIndex];
+        tier.blocks.splice(blockIndex, 1);
+        if (tier.blocks.length > 0) {
+            this.normalizeTierWeights(tierIndex);
+        }
+    }
+    
+    restoreBlockToPool(blockType, mode) {
+        // Re-create the block element in the pool
+        const pool = $('#logic-block-pool');
+        
+        // Find if this block type already exists in pool with matching mode (if applicable)
+        let existingBlock;
+        if (mode) {
+            existingBlock = pool.find(`.logic-block[data-block-type="${blockType}"][data-mode="${mode}"]`);
+        } else {
+            existingBlock = pool.find(`.logic-block[data-block-type="${blockType}"]`);
+        }
+        
+        if (existingBlock.length > 0) {
+            // Already in pool, don't duplicate
+            return;
+        }
+        
+        // Create new block element
+        const blockData = { type: blockType, mode: mode, weight: 1 };
+        const block = this.createBlockElement(blockData);
+        block.removeClass('in-tier');
+        pool.append(block);
+    }
+    
+    sortLogicBlockPool() {
+        const pool = $('#logic-block-pool');
+        const blocks = pool.find('.logic-block').detach().toArray();
+        
+        // Sort blocks by their label text
+        blocks.sort((a, b) => {
+            const labelA = $(a).find('.block-label').text().toLowerCase();
+            const labelB = $(b).find('.block-label').text().toLowerCase();
+            return labelA.localeCompare(labelB);
+        });
+        
+        // Re-append in sorted order
+        blocks.forEach(block => pool.append(block));
+    }
+    
+    moveBlockBetweenTiers(fromTierIndex, blockIndex, toTierIndex) {
+        const fromTier = this.currentTierConfig[fromTierIndex];
+        const toTier = this.currentTierConfig[toTierIndex];
+        
+        // Remove from source
+        const [block] = fromTier.blocks.splice(blockIndex, 1);
+        
+        // Add to destination
+        toTier.blocks.push(block);
+        block.weight = 1;
+        
+        // Normalize both tiers
+        if (fromTier.blocks.length > 0) {
+            this.normalizeTierWeights(fromTierIndex);
+        }
+        this.normalizeTierWeights(toTierIndex);
+    }
+    
+    normalizeTierWeights(tierIndex) {
+        const tier = this.currentTierConfig[tierIndex];
+        if (tier.blocks.length === 0) return;
+        
+        // Equal distribution by default
+        const equalWeight = 1 / tier.blocks.length;
+        tier.blocks.forEach(block => {
+            if (!block.weight || block.weight === 0) {
+                block.weight = equalWeight;
+            }
+        });
+    }
+    
+    updateTierConfigFromDOM() {
+        // Read current tier configuration from DOM (useful after manual adjustments)
+        for (let i = 0; i < 3; i++) {
+            const tierBlocks = $(`.tier-blocks[data-tier-index="${i}"]`);
+            const blocks = tierBlocks.find('.logic-block');
+            
+            this.currentTierConfig[i].blocks = [];
+            blocks.each((index, el) => {
+                const $block = $(el);
+                this.currentTierConfig[i].blocks.push({
+                    type: $block.attr('data-block-type'),
+                    mode: $block.attr('data-mode') || null,
+                    weight: parseFloat($block.attr('data-weight') || (1 / blocks.length))
+                });
+            });
+        }
+    }
+    
+    renderTiers() {
+        // Render all tiers based on currentTierConfig
+        for (let i = 0; i < 3; i++) {
+            const tierBlocks = $(`.tier-blocks[data-tier-index="${i}"]`);
+            tierBlocks.empty();
+            
+            const tier = this.currentTierConfig[i];
+            
+            // Calculate total weight for normalization
+            const totalWeight = tier.blocks.reduce((sum, b) => sum + b.weight, 0);
+            
+            tier.blocks.forEach((blockData, index) => {
+                const block = this.createBlockElement(blockData);
+                block.addClass('in-tier');
+                block.attr('data-weight', blockData.weight);
+                
+                // Set flex-grow based on weight
+                const flexGrow = totalWeight > 0 ? blockData.weight / totalWeight : 1;
+                block.css('flex-grow', flexGrow);
+                block.css('flex-basis', '0');
+                
+                // Add weight tooltip
+                const weightPercent = totalWeight > 0 ? Math.round((blockData.weight / totalWeight) * 100) : Math.round(100 / tier.blocks.length);
+                const weightDisplay = $('<div class="block-weight"></div>').text(`${weightPercent}%`);
+                block.append(weightDisplay);
+                
+                tierBlocks.append(block);
+                
+                // Add resizer if not the last block
+                if (index < tier.blocks.length - 1) {
+                    const resizer = $('<div class="block-resizer"></div>');
+                    this.setupResizer(resizer, i, index);
+                    tierBlocks.append(resizer);
+                }
+            });
+        }
+    }
+    
+    createBlockElement(blockData) {
+        const block = $('<div class="logic-block"></div>');
+        block.attr('draggable', 'true');
+        block.attr('data-block-type', blockData.type);
+        
+        if (blockData.mode) {
+            block.attr('data-mode', blockData.mode);
+        }
+        
+        // Determine icon and label
+        let icon, label, toggleable = false;
+        
+        switch(blockData.type) {
+            case 'wallFollowing':
+                toggleable = true;
+                if (blockData.mode === 'left') {
+                    icon = '←';
+                    label = 'Left Wall';
+                } else {
+                    icon = '→';
+                    label = 'Right Wall';
+                }
+                break;
+            case 'rightWall':
+                // Legacy support
+                icon = '→';
+                label = 'Right Wall';
+                break;
+            case 'lineOfSight':
+                icon = '❗';
+                label = 'Line of Sight';
+                break;
+            case 'backtracking':
+                toggleable = true;
+                if (blockData.mode === 'seek') {
+                    icon = '❓';
+                    label = 'Seek Backtracking';
+                } else {
+                    icon = '🧠';
+                    label = 'Avoid Backtracking';
+                }
+                break;
+            case 'social':
+                toggleable = true;
+                if (blockData.mode === 'avoid') {
+                    icon = '🫣';
+                    label = 'Avoid Others';
+                } else {
+                    icon = '❤️';
+                    label = 'Follow Others';
+                }
+                break;
+            case 'randomGuesser':
+                icon = '🎲';
+                label = 'Random Guesser';
+                break;
+        }
+        
+        const iconDiv = $('<div class="block-icon"></div>').text(icon);
+        const labelDiv = $('<div class="block-label"></div>').text(label);
+        
+        block.append(iconDiv, labelDiv);
+        
+        if (toggleable) {
+            block.addClass('toggleable');
+            const isChecked = (blockData.type === 'wallFollowing' && blockData.mode === 'left') ||
+                            (blockData.type === 'backtracking' && blockData.mode === 'seek') ||
+                            (blockData.type === 'social' && blockData.mode === 'avoid');
+            const toggle = $(`
+                <label class="block-toggle">
+                    <input type="checkbox" class="toggle-switch" ${isChecked ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            `);
+            block.append(toggle);
+        }
+        
+        return block;
+    }
+    
+    setupResizer(resizer, tierIndex, leftBlockIndex) {
+        const game = this;
+        let isResizing = false;
+        let startX = 0;
+        let startWeights = [];
+        
+        resizer.on('mousedown', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            isResizing = true;
+            startX = e.pageX;
+            
+            const tier = game.currentTierConfig[tierIndex];
+            startWeights = tier.blocks.map(b => b.weight);
+            
+            $(this).addClass('resizing');
+            $('body').css('cursor', 'col-resize');
+        });
+        
+        $(document).on('mousemove', function(e) {
+            if (!isResizing) return;
+            e.preventDefault();
+            
+            const deltaX = e.pageX - startX;
+            const tierBlocks = $(`.tier-blocks[data-tier-index="${tierIndex}"]`);
+            const containerWidth = tierBlocks.width();
+            
+            // Calculate the change as a fraction of total weight
+            const tier = game.currentTierConfig[tierIndex];
+            const totalWeight = startWeights[leftBlockIndex] + startWeights[leftBlockIndex + 1];
+            const deltaWeight = (deltaX / containerWidth) * totalWeight;
+            
+            // Calculate new weights with constraints
+            let newLeftWeight = startWeights[leftBlockIndex] + deltaWeight;
+            let newRightWeight = startWeights[leftBlockIndex + 1] - deltaWeight;
+            
+            // Enforce minimum of 10% of the pair's total
+            const minWeight = totalWeight * 0.1;
+            const maxWeight = totalWeight * 0.9;
+            
+            newLeftWeight = Math.max(minWeight, Math.min(maxWeight, newLeftWeight));
+            newRightWeight = totalWeight - newLeftWeight;
+            
+            // Update the blocks
+            tier.blocks[leftBlockIndex].weight = newLeftWeight;
+            tier.blocks[leftBlockIndex + 1].weight = newRightWeight;
+            
+            game.renderTiers();
+        });
+        
+        $(document).on('mouseup', function() {
+            if (isResizing) {
+                isResizing = false;
+                $('.block-resizer').removeClass('resizing');
+                $('body').css('cursor', '');
+            }
         });
     }
     
@@ -394,44 +891,7 @@ class CornMazeGame {
     updatePlayerUI() {
         // Update value displays
         const movesPerSec = parseFloat($('#speed-slider').val());
-        const rightWall = parseFloat($('#right-wall-slider').val());
-        const backtracking = parseFloat($('#backtracking-slider').val());
-        const lineOfSight = parseFloat($('#line-of-sight-slider').val());
-        
         $('#speed-value').text(`${movesPerSec}/s`);
-        
-        // Format display values
-        const formatValue = (val) => {
-            if (val === 0) return 'Off';
-            if (val === 0.5) return 'Some';
-            if (val === 1) return 'Always';
-            return val;
-        };
-        
-        const formatBacktracking = (val) => {
-            if (val === -1) return 'Always';
-            if (val === -0.5) return 'Often';
-            if (val === 0) return 'Neutral';
-            if (val === 0.5) return 'Avoid';
-            if (val === 1) return 'Never!';
-            return val;
-        };
-        
-        const formatSocial = (val) => {
-            if (val === -1) return 'Loner';
-            if (val === -0.5) return 'Shy';
-            if (val === 0) return 'Neutral';
-            if (val === 0.5) return 'Friendly';
-            if (val === 1) return 'Follower';
-            return val;
-        };
-        
-        const social = parseFloat($('#social-slider').val());
-        
-        $('#right-wall-value').text(formatValue(rightWall));
-        $('#backtracking-value').text(formatBacktracking(backtracking));
-        $('#line-of-sight-value').text(formatValue(lineOfSight));
-        $('#social-value').text(formatSocial(social));
         
         // Update emoji display
         $('#spawn-emoji').text(this.currentEmoji);
@@ -454,7 +914,7 @@ class CornMazeGame {
     }
     
     cyclePlaybackSpeed() {
-        const speeds = [0.5, 1, 1.5, 2];
+        const speeds = [0.5, 1, 1.5, 2, 5];
         const currentIndex = speeds.indexOf(this.playbackSpeed);
         this.playbackSpeed = speeds[(currentIndex + 1) % speeds.length];
         this.updatePlayerUI();
@@ -468,18 +928,12 @@ class CornMazeGame {
         // Get current AI settings
         const movesPerSec = parseFloat($('#speed-slider').val());
         const speed = 1000 / movesPerSec; // Convert moves/sec to milliseconds
-        const rightWall = parseFloat($('#right-wall-slider').val());
-        const backtracking = parseFloat($('#backtracking-slider').val());
-        const lineOfSight = parseFloat($('#line-of-sight-slider').val());
-        const social = parseFloat($('#social-slider').val());
         
-        // Create AI brain with these settings
-        const brain = new AIBrain({
-            rightWall: rightWall,
-            avoidRevisit: backtracking, // Internal name stays the same
-            lineOfSight: lineOfSight,
-            social: social
-        }, speed);
+        // Deep clone the tier configuration for this player
+        const tiersCopy = JSON.parse(JSON.stringify(this.currentTierConfig));
+        
+        // Create AI brain with tier configuration
+        const brain = new AIBrain(tiersCopy, speed);
         
         // Create player
         const player = new Player(this.currentEmoji, brain, this.startPosition, this);
@@ -488,6 +942,34 @@ class CornMazeGame {
         
         // Start player movement
         player.startMoving();
+        
+        // Collect all block types/modes that were used
+        const usedBlocks = [];
+        this.currentTierConfig.forEach(tier => {
+            tier.blocks.forEach(block => {
+                usedBlocks.push({ type: block.type, mode: block.mode });
+            });
+        });
+        
+        // Reset tier configuration for next player
+        this.currentTierConfig = [
+            { blocks: [] },
+            { blocks: [] },
+            { blocks: [] }
+        ];
+        this.renderTiers();
+        
+        // Restore all used blocks back to the pool
+        usedBlocks.forEach(block => {
+            this.restoreBlockToPool(block.type, block.mode);
+        });
+        
+        // Sort logic blocks in pool alphabetically
+        this.sortLogicBlockPool();
+        
+        // Update emoji for next player
+        this.currentEmoji = Player.getRandomEmoji();
+        this.updatePlayerUI();
         
         // Render
         this.render();
@@ -500,41 +982,53 @@ class CornMazeGame {
         this.players = [];
         this.isPaused = false;
         $('#pause-play-button').text('⏸');
+        this.render();
     }
     
     getPlayerTooltip(player) {
-        const formatValue = (val) => {
-            if (val === 0) return 'Off';
-            if (val === 0.5) return 'Some';
-            if (val === 1) return 'Always';
-            return val;
-        };
-        
-        const formatBacktracking = (val) => {
-            if (val === -1) return 'Always';
-            if (val === -0.5) return 'Often';
-            if (val === 0) return 'Neutral';
-            if (val === 0.5) return 'Avoid';
-            if (val === 1) return 'Never!';
-            return val;
-        };
-        
         const movesPerSec = (1000 / player.brain.speed).toFixed(1);
         
-        const formatSocial = (val) => {
-            if (val === -1) return 'Loner';
-            if (val === -0.5) return 'Shy';
-            if (val === 0) return 'Neutral';
-            if (val === 0.5) return 'Friendly';
-            if (val === 1) return 'Follower';
-            return val;
-        };
+        // Build tooltip from tier configuration
+        let tooltip = `Speed: ${movesPerSec}/s\n\n`;
         
-        return `Speed: ${movesPerSec}/s
-Right Wall: ${formatValue(player.brain.weights.rightWall)}
-Backtracking: ${formatBacktracking(player.brain.weights.avoidRevisit)}
-Line of Sight: ${formatValue(player.brain.weights.lineOfSight)}
-Social: ${formatSocial(player.brain.weights.social || 0)}`;
+        const tierNames = ['High', 'Med', 'Low'];
+        player.brain.tiers.forEach((tier, index) => {
+            if (tier.blocks.length > 0) {
+                tooltip += `${tierNames[index]} Priority:\n`;
+                
+                // Calculate total weight for this tier
+                const totalWeight = tier.blocks.reduce((sum, b) => sum + b.weight, 0);
+                
+                tier.blocks.forEach(block => {
+                    // Calculate percentage relative to this tier's total
+                    const percent = totalWeight > 0 ? Math.round((block.weight / totalWeight) * 100) : 0;
+                    let name = '';
+                    switch(block.type) {
+                        case 'wallFollowing':
+                            name = block.mode === 'left' ? 'Left Wall' : 'Right Wall';
+                            break;
+                        case 'rightWall':
+                            name = 'Right Wall';
+                            break;
+                        case 'lineOfSight':
+                            name = 'Line of Sight';
+                            break;
+                        case 'backtracking':
+                            name = block.mode === 'seek' ? 'Seek Backtracking' : 'Avoid Backtracking';
+                            break;
+                        case 'social':
+                            name = block.mode === 'follow' ? 'Follow Others' : 'Avoid Others';
+                            break;
+                        case 'randomGuesser':
+                            name = 'Random Guesser';
+                            break;
+                    }
+                    tooltip += `  ${name} (${percent}%)\n`;
+                });
+            }
+        });
+        
+        return tooltip.trim();
     }
     
     saveToLocalStorage() {
