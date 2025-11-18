@@ -172,6 +172,12 @@ export default class AIBrain {
                 const maxDist = Math.max(...distances);
                 return minDist < maxDist || closerMoves.length === 1; // True if distances vary OR only one closer move
             
+            case 'checkMap':
+                // Applicable if there's a finish position and a path exists
+                if (!finish) return false;
+                const shortestPath = this.findShortestPath(currentPos, finish, maze);
+                return shortestPath !== null && shortestPath.length > 1;
+            
             case 'backtracking':
                 // Get visit counts for all moves
                 const counts = possibleMoves.map(m => {
@@ -212,6 +218,9 @@ export default class AIBrain {
             
             case 'towardExit':
                 return this.towardExitLogic(possibleMoves, currentPos, finish);
+            
+            case 'checkMap':
+                return this.checkMapLogic(possibleMoves, currentPos, finish, maze);
             
             case 'backtracking':
                 return this.backtrackingLogic(possibleMoves, visited, visitCounts, block.mode || 'avoid');
@@ -324,6 +333,35 @@ export default class AIBrain {
             moves: bestMoves, 
             thought: '🧭'
         };
+    }
+    
+    // Check Map Logic - follows shortest path with perfect knowledge
+    checkMapLogic(possibleMoves, currentPos, finish, maze) {
+        if (!finish) {
+            return { moves: possibleMoves, thought: null };
+        }
+        
+        // Find shortest path from current position to finish
+        const shortestPath = this.findShortestPath(currentPos, finish, maze);
+        
+        if (!shortestPath || shortestPath.length <= 1) {
+            return { moves: possibleMoves, thought: null };
+        }
+        
+        // The next step on the shortest path is at index 1 (index 0 is current position)
+        const nextStep = shortestPath[1];
+        
+        // Find all moves that lead to the next step (should be one, but handle ties)
+        const bestMoves = possibleMoves.filter(move => 
+            move.x === nextStep.x && move.y === nextStep.y
+        );
+        
+        if (bestMoves.length > 0) {
+            return { moves: bestMoves, thought: '🗺️' };
+        }
+        
+        // Fallback (shouldn't happen)
+        return { moves: possibleMoves, thought: null };
     }
     
     // Backtracking Logic
@@ -532,6 +570,52 @@ export default class AIBrain {
         }
         
         return moves;
+    }
+    
+    // Find shortest path using BFS (for Check Map logic)
+    findShortestPath(start, finish, maze) {
+        if (!start || !finish) return null;
+        
+        // BFS to find shortest path
+        const queue = [[start.x, start.y]];
+        const visited = new Set();
+        const parent = new Map();
+        visited.add(`${start.x},${start.y}`);
+        
+        const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+        
+        while (queue.length > 0) {
+            const [x, y] = queue.shift();
+            
+            if (x === finish.x && y === finish.y) {
+                // Reconstruct path
+                const path = [];
+                let current = `${x},${y}`;
+                while (current) {
+                    const [cx, cy] = current.split(',').map(Number);
+                    path.unshift({ x: cx, y: cy });
+                    current = parent.get(current);
+                }
+                return path;
+            }
+            
+            for (const [dx, dy] of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+                const key = `${nx},${ny}`;
+                
+                if (nx >= 0 && nx < maze.width && 
+                    ny >= 0 && ny < maze.height &&
+                    maze.grid[ny][nx] === 1 &&
+                    !visited.has(key)) {
+                    visited.add(key);
+                    parent.set(key, `${x},${y}`);
+                    queue.push([nx, ny]);
+                }
+            }
+        }
+        
+        return null; // No path found
     }
     
     // Wall following scoring (supports both right and left)

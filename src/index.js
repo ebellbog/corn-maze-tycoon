@@ -747,6 +747,10 @@ class CornMazeGame {
                 icon = '🧭';
                 label = 'Toward Exit';
                 break;
+            case 'checkMap':
+                icon = '🗺️';
+                label = 'Check Map';
+                break;
             case 'backtracking':
                 toggleable = true;
                 if (blockData.mode === 'seek') {
@@ -1017,6 +1021,9 @@ class CornMazeGame {
                             break;
                         case 'towardExit':
                             name = 'Toward Exit';
+                            break;
+                        case 'checkMap':
+                            name = 'Check Map';
                             break;
                         case 'backtracking':
                             name = block.mode === 'seek' ? 'Seek Backtracking' : 'Avoid Backtracking';
