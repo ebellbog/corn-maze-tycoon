@@ -501,9 +501,19 @@ class CornMazeGame {
             const { type, mode, element } = game.dragState.draggedBlock;
             const isFromPool = game.dragState.sourceTier === null;
             
+            // Check if this block type+mode already exists in this specific tier
+            const tier = game.currentTierConfig[tierIndex];
+            const alreadyInThisTier = tier.blocks.some(b => 
+                b.type === type && (b.mode || null) === (mode || null)
+            );
+            
+            if (alreadyInThisTier) {
+                // Don't allow duplicates in the same tier
+                return false;
+            }
+            
             if (isFromPool) {
-                // Remove from pool and add to tier
-                $(element).remove();
+                // Add to tier (don't remove from pool anymore - allow multiple copies)
                 game.addBlockToTier(tierIndex, type, mode);
             } else {
                 // Move from another tier
@@ -520,13 +530,8 @@ class CornMazeGame {
             e.stopPropagation();
             
             if (game.dragState.sourceTier !== null) {
-                // Remove block from tier
-                const { type, mode } = game.dragState.draggedBlock;
+                // Remove block from tier (blocks stay in pool permanently)
                 game.removeBlockFromTier(game.dragState.sourceTier, game.dragState.sourceIndex);
-                
-                // Restore block to pool
-                game.restoreBlockToPool(type, mode);
-                
                 game.renderTiers();
             }
             return false;
@@ -548,10 +553,8 @@ class CornMazeGame {
                 e.preventDefault();
                 
                 if (game.dragState.sourceTier !== null) {
-                    // Remove block from tier and restore to pool
-                    const { type, mode } = game.dragState.draggedBlock;
+                    // Remove block from tier (blocks stay in pool permanently)
                     game.removeBlockFromTier(game.dragState.sourceTier, game.dragState.sourceIndex);
-                    game.restoreBlockToPool(type, mode);
                     game.renderTiers();
                 }
             }
@@ -668,9 +671,15 @@ class CornMazeGame {
         // Render all tiers based on currentTierConfig
         for (let i = 0; i < 3; i++) {
             const tierBlocks = $(`.tier-blocks[data-tier-index="${i}"]`);
+            // Completely clear the tier (including any event handlers)
             tierBlocks.empty();
             
             const tier = this.currentTierConfig[i];
+            
+            // Skip if tier has no blocks
+            if (!tier || !tier.blocks || tier.blocks.length === 0) {
+                continue;
+            }
             
             // Calculate total weight for normalization
             const totalWeight = tier.blocks.reduce((sum, b) => sum + b.weight, 0);
@@ -733,6 +742,10 @@ class CornMazeGame {
             case 'lineOfSight':
                 icon = '❗';
                 label = 'Line of Sight';
+                break;
+            case 'towardExit':
+                icon = '🧭';
+                label = 'Toward Exit';
                 break;
             case 'backtracking':
                 toggleable = true;
@@ -943,29 +956,18 @@ class CornMazeGame {
         // Start player movement
         player.startMoving();
         
-        // Collect all block types/modes that were used
-        const usedBlocks = [];
-        this.currentTierConfig.forEach(tier => {
-            tier.blocks.forEach(block => {
-                usedBlocks.push({ type: block.type, mode: block.mode });
-            });
-        });
-        
-        // Reset tier configuration for next player
+        // Reset tier configuration for next player (deep clean)
         this.currentTierConfig = [
             { blocks: [] },
             { blocks: [] },
             { blocks: [] }
         ];
+        
+        // Clear all tier DOMs explicitly
+        $('.tier-blocks').empty();
+        
+        // Render empty tiers
         this.renderTiers();
-        
-        // Restore all used blocks back to the pool
-        usedBlocks.forEach(block => {
-            this.restoreBlockToPool(block.type, block.mode);
-        });
-        
-        // Sort logic blocks in pool alphabetically
-        this.sortLogicBlockPool();
         
         // Update emoji for next player
         this.currentEmoji = Player.getRandomEmoji();
@@ -1012,6 +1014,9 @@ class CornMazeGame {
                             break;
                         case 'lineOfSight':
                             name = 'Line of Sight';
+                            break;
+                        case 'towardExit':
+                            name = 'Toward Exit';
                             break;
                         case 'backtracking':
                             name = block.mode === 'seek' ? 'Seek Backtracking' : 'Avoid Backtracking';

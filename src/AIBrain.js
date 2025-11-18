@@ -4,8 +4,8 @@ export default class AIBrain {
     constructor(tiers = [], speed = 500) {
         // Tiers: array of tier objects, each containing blocks
         // Each tier: { blocks: [{ type, weight, mode? }] }
-        // Types: 'rightWall', 'lineOfSight', 'backtracking', 'social', 'randomGuesser'
-        // Modes (optional): for 'backtracking' -> 'avoid'|'seek', for 'social' -> 'follow'|'avoid'
+        // Types: 'wallFollowing', 'lineOfSight', 'towardExit', 'backtracking', 'social', 'randomGuesser'
+        // Modes (optional): for 'wallFollowing' -> 'left'|'right', for 'backtracking' -> 'avoid'|'seek', for 'social' -> 'follow'|'avoid'
         this.tiers = tiers.length > 0 ? tiers : [
             { blocks: [] },
             { blocks: [] },
@@ -44,15 +44,20 @@ export default class AIBrain {
             return { move: possibleMoves[0], thought: null }; // Only one option
         }
         
-        // Process tiers from top to bottom
-        for (const tier of this.tiers) {
+        // Process tiers recursively for tie-breaking
+        let currentMoves = possibleMoves;
+        let emotes = [];
+        
+        for (let tierIndex = 0; tierIndex < this.tiers.length; tierIndex++) {
+            const tier = this.tiers[tierIndex];
+            
             if (tier.blocks.length === 0) {
                 continue; // Skip empty tiers
             }
             
-            // Filter blocks by applicability
+            // Filter blocks by applicability (using current narrowed-down moves)
             const applicableBlocks = tier.blocks.filter(block => 
-                this.isBlockApplicable(block, currentPos, visited, maze, finish, lastDirection, allPlayers, currentPlayerIndex, visitCounts, possibleMoves)
+                this.isBlockApplicable(block, currentPos, visited, maze, finish, lastDirection, allPlayers, currentPlayerIndex, visitCounts, currentMoves)
             );
             
             if (applicableBlocks.length === 0) {
@@ -76,15 +81,50 @@ export default class AIBrain {
             
             // If we selected a block, execute its logic
             if (selectedBlock) {
-                const result = this.executeBlock(selectedBlock, currentPos, possibleMoves, visited, visitCounts, maze, finish, lastDirection, allPlayers, currentPlayerIndex);
-                if (result.move) {
-                    return result;
+                const result = this.executeBlock(selectedBlock, currentPos, currentMoves, visited, visitCounts, maze, finish, lastDirection, allPlayers, currentPlayerIndex);
+                
+                if (result.moves && result.moves.length > 0) {
+                    // Add emote to our collection
+                    if (result.thought) {
+                        emotes.push(result.thought);
+                    }
+                    
+                    // If we narrowed down to exactly one move, we're done
+                    if (result.moves.length === 1) {
+                        const finalThought = this.combineEmotes(emotes);
+                        return { move: result.moves[0], thought: finalThought };
+                    }
+                    
+                    // Otherwise, continue to next tier with these narrowed-down moves
+                    currentMoves = result.moves;
                 }
             }
         }
         
-        // If no blocks fired, fall back to random guesser
-        return this.randomGuesser(possibleMoves);
+        // If we still have multiple moves after all tiers, pick randomly
+        const finalMove = currentMoves[Math.floor(Math.random() * currentMoves.length)];
+        
+        // Only add dice emoji if we have no other emotes
+        if (emotes.length === 0) {
+            emotes.push('🎲');
+        }
+        
+        const finalThought = this.combineEmotes(emotes);
+        return { move: finalMove, thought: finalThought };
+    }
+    
+    // Combine multiple emotes, excluding dice if there are others
+    combineEmotes(emotes) {
+        if (emotes.length === 0) return null;
+        if (emotes.length === 1) return emotes[0];
+        
+        // Filter out dice if there are other emotes
+        const filtered = emotes.filter(e => e !== '🎲');
+        if (filtered.length > 0) {
+            return filtered.join('');
+        }
+        
+        return emotes[0];
     }
     
     // Check if a logic block is applicable to the current situation
@@ -100,11 +140,51 @@ export default class AIBrain {
                 return this.isFinishVisible(currentPos, finish, maze) || 
                        this.hasUnchartedTerritory(currentPos, maze, visited, possibleMoves);
             
+            case 'towardExit':
+                // Applicable if we have a finish position AND at least one move gets us closer than current
+                if (!finish) return false;
+                
+                // Calculate current position's distance to exit
+                const currentDx = finish.x - currentPos.x;
+                const currentDy = finish.y - currentPos.y;
+                const currentDistance = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
+                
+                // Find moves that are closer to exit than current position
+                const closerMoves = possibleMoves.filter(move => {
+                    const dx = finish.x - move.x;
+                    const dy = finish.y - move.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    return distance < currentDistance;
+                });
+                
+                // Not applicable if no moves get us closer
+                if (closerMoves.length === 0) return false;
+                
+                // Calculate distances for closer moves
+                const distances = closerMoves.map(move => {
+                    const dx = finish.x - move.x;
+                    const dy = finish.y - move.y;
+                    return Math.sqrt(dx * dx + dy * dy);
+                });
+                
+                // Only applicable if there's variation among the closer moves
+                const minDist = Math.min(...distances);
+                const maxDist = Math.max(...distances);
+                return minDist < maxDist || closerMoves.length === 1; // True if distances vary OR only one closer move
+            
             case 'backtracking':
-                // Applicable if there's a mix of visited and unvisited paths
-                const visitedCount = possibleMoves.filter(m => visited.has(`${m.x},${m.y}`)).length;
-                const unvisitedCount = possibleMoves.length - visitedCount;
-                return visitedCount > 0 && unvisitedCount > 0;
+                // Get visit counts for all moves
+                const counts = possibleMoves.map(m => {
+                    const key = `${m.x},${m.y}`;
+                    return visitCounts.get(key) || 0;
+                });
+                
+                // Only applicable if not all moves have the same visit count
+                const minCount = Math.min(...counts);
+                const maxCount = Math.max(...counts);
+                
+                // Applicable if there's variation in visit counts
+                return minCount < maxCount;
             
             case 'social':
                 // Applicable if other players are visible in any direction
@@ -130,6 +210,9 @@ export default class AIBrain {
             case 'lineOfSight':
                 return this.lineOfSightLogic(possibleMoves, currentPos, finish, maze, visited);
             
+            case 'towardExit':
+                return this.towardExitLogic(possibleMoves, currentPos, finish);
+            
             case 'backtracking':
                 return this.backtrackingLogic(possibleMoves, visited, visitCounts, block.mode || 'avoid');
             
@@ -154,13 +237,10 @@ export default class AIBrain {
         
         // Find the highest score
         const maxScore = Math.max(...scoredMoves.map(sm => sm.score));
-        const bestMoves = scoredMoves.filter(sm => sm.score === maxScore);
-        
-        // Pick randomly among best moves
-        const chosen = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        const bestMoves = scoredMoves.filter(sm => sm.score === maxScore).map(sm => sm.move);
         
         return { 
-            move: chosen.move, 
+            moves: bestMoves, 
             thought: mode === 'left' ? '←' : '→'
         };
     }
@@ -174,79 +254,99 @@ export default class AIBrain {
     lineOfSightLogic(possibleMoves, currentPos, finish, maze, visited) {
         // First priority: head toward visible finish
         if (finish && this.isFinishVisible(currentPos, finish, maze)) {
-            for (const move of possibleMoves) {
-                const movingTowardFinish = 
-                    (move.direction === 'up' && finish.y < currentPos.y) ||
-                    (move.direction === 'down' && finish.y > currentPos.y) ||
-                    (move.direction === 'left' && finish.x < currentPos.x) ||
-                    (move.direction === 'right' && finish.x > currentPos.x);
-                
-                if (movingTowardFinish) {
-                    return { move, thought: '❗' };
-                }
+            const towardFinish = possibleMoves.filter(move => {
+                return (move.direction === 'up' && finish.y < currentPos.y) ||
+                       (move.direction === 'down' && finish.y > currentPos.y) ||
+                       (move.direction === 'left' && finish.x < currentPos.x) ||
+                       (move.direction === 'right' && finish.x > currentPos.x);
+            });
+            
+            if (towardFinish.length > 0) {
+                return { moves: towardFinish, thought: '❗' };
             }
         }
         
         // Second priority: head toward uncharted territory
-        let bestMove = null;
         let bestDistance = Infinity;
+        const movesWithDistance = possibleMoves.map(move => ({
+            move,
+            distance: this.distanceToUncharted(move, currentPos, maze, visited)
+        })).filter(md => md.distance > 0);
         
-        for (const move of possibleMoves) {
-            const distance = this.distanceToUncharted(move, currentPos, maze, visited);
-            if (distance < bestDistance && distance > 0) {
-                bestDistance = distance;
-                bestMove = move;
-            }
+        if (movesWithDistance.length > 0) {
+            bestDistance = Math.min(...movesWithDistance.map(md => md.distance));
+            const bestMoves = movesWithDistance.filter(md => md.distance === bestDistance).map(md => md.move);
+            return { moves: bestMoves, thought: '❗' };
         }
         
-        if (bestMove) {
-            return { move: bestMove, thought: '❗' };
+        // Fallback - return all moves
+        return { moves: possibleMoves, thought: null };
+    }
+    
+    // Toward Exit Logic
+    towardExitLogic(possibleMoves, currentPos, finish) {
+        if (!finish) {
+            return { moves: possibleMoves, thought: null };
         }
         
-        // Fallback to random
-        return this.randomGuesser(possibleMoves);
+        // Calculate current position's distance to exit
+        const currentDx = finish.x - currentPos.x;
+        const currentDy = finish.y - currentPos.y;
+        const currentDistance = Math.sqrt(currentDx * currentDx + currentDy * currentDy);
+        
+        // Filter to only moves that get us closer to the exit
+        const closerMoves = possibleMoves.filter(move => {
+            const dx = finish.x - move.x;
+            const dy = finish.y - move.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < currentDistance;
+        });
+        
+        // If no moves get us closer, return all (shouldn't happen if applicability check works)
+        if (closerMoves.length === 0) {
+            return { moves: possibleMoves, thought: null };
+        }
+        
+        // Calculate Euclidean distance from each closer move to the finish
+        const scoredMoves = closerMoves.map(move => {
+            const dx = finish.x - move.x;
+            const dy = finish.y - move.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            return { move, distance };
+        });
+        
+        // Find the move(s) with minimum distance
+        const minDistance = Math.min(...scoredMoves.map(sm => sm.distance));
+        const bestMoves = scoredMoves.filter(sm => sm.distance === minDistance).map(sm => sm.move);
+        
+        return { 
+            moves: bestMoves, 
+            thought: '🧭'
+        };
     }
     
     // Backtracking Logic
     backtrackingLogic(possibleMoves, visited, visitCounts, mode) {
+        // Get visit count for each move
+        const movesWithCounts = possibleMoves.map(move => {
+            const key = `${move.x},${move.y}`;
+            const count = visitCounts.get(key) || 0;
+            return { move, count };
+        });
+        
         if (mode === 'avoid') {
-            // Prefer unvisited, then least visited
-            const scoredMoves = possibleMoves.map(move => {
-                const key = `${move.x},${move.y}`;
-                const isVisited = visited.has(key);
-                const visitCount = visitCounts.get(key) || 0;
-                
-                if (!isVisited) {
-                    return { move, score: 1000 }; // Strongly prefer unvisited
-                } else {
-                    return { move, score: -visitCount }; // Penalize by visit count
-                }
-            });
+            // Choose the square(s) with the lowest visit count
+            const minCount = Math.min(...movesWithCounts.map(mc => mc.count));
+            const bestMoves = movesWithCounts.filter(mc => mc.count === minCount).map(mc => mc.move);
             
-            scoredMoves.sort((a, b) => b.score - a.score);
-            return { move: scoredMoves[0].move, thought: '🧠' };
+            return { moves: bestMoves, thought: '🧠' };
         } else {
-            // mode === 'seek': prefer visited, with diminishing returns
-            const scoredMoves = possibleMoves.map(move => {
-                const key = `${move.x},${move.y}`;
-                const isVisited = visited.has(key);
-                const visitCount = visitCounts.get(key) || 0;
-                
-                if (!isVisited) {
-                    return { move, score: 0 }; // Neutral for unvisited
-                } else if (visitCount === 1) {
-                    return { move, score: 3 };
-                } else if (visitCount === 2) {
-                    return { move, score: 2 };
-                } else if (visitCount === 3) {
-                    return { move, score: 1 };
-                } else {
-                    return { move, score: 0 }; // After 4+ visits, become neutral
-                }
-            });
+            // mode === 'seek': choose the square(s) with the highest visit count
+            const maxCount = Math.max(...movesWithCounts.map(mc => mc.count));
+            const bestMoves = movesWithCounts.filter(mc => mc.count === maxCount).map(mc => mc.move);
             
-            scoredMoves.sort((a, b) => b.score - a.score);
-            return { move: scoredMoves[0].move, thought: '❓' };
+            return { moves: bestMoves, thought: '❓' };
         }
     }
     
@@ -262,15 +362,16 @@ export default class AIBrain {
             }
         });
         
-        scoredMoves.sort((a, b) => b.score - a.score);
+        const maxScore = Math.max(...scoredMoves.map(sm => sm.score));
+        const bestMoves = scoredMoves.filter(sm => sm.score === maxScore).map(sm => sm.move);
         const emote = mode === 'follow' ? '❤️' : '🫣';
-        return { move: scoredMoves[0].move, thought: emote };
+        
+        return { moves: bestMoves, thought: emote };
     }
     
     // Random Guesser Logic
     randomGuesser(possibleMoves) {
-        const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-        return { move: randomMove, thought: '🎲' };
+        return { moves: possibleMoves, thought: '🎲' };
     }
     
     // Helper: Check if finish is visible from current position
