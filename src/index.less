@@ -3,6 +3,79 @@
 @dirtBrown: #a48174;
 @gridLineGray: #3334;
 
+// Shared look for all frosted-glass sidebar panels
+@panelBg: rgba(255, 255, 255, 0.55);
+@panelBlur: blur(4px);
+
+.panel-surface() {
+    background-color: @panelBg;
+    backdrop-filter: @panelBlur;
+    -webkit-backdrop-filter: @panelBlur;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-family: Arial, sans-serif;
+}
+
+// Shared button shape/behavior; color comes from .button-solid / .button-outline
+@green: #2e7d32;
+@greenDark: #1b5e20;
+
+.button-base() {
+    border: 2px solid transparent;
+    border-radius: 8px;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    
+    &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    &:active {
+        transform: translateY(0);
+    }
+    
+    i {
+        font-size: 12px;
+    }
+}
+
+.button-solid(@bg: @green, @hover: @greenDark) {
+    background-color: @bg;
+    border-color: @bg;
+    color: white;
+    
+    &:hover {
+        background-color: @hover;
+        border-color: @hover;
+    }
+}
+
+.button-outline(@color: @green) {
+    background-color: rgba(255, 255, 255, 0.85);
+    border-color: @color;
+    color: @color;
+    
+    &:hover {
+        background-color: white;
+    }
+}
+
+.panel-heading(@gap: 12px) {
+    margin: 0 0 @gap 0;
+    font-size: 18px;
+    color: #2e7d32;
+    text-align: center;
+    border-bottom: 2px solid #2e7d32;
+    padding-bottom: 8px;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -24,12 +97,15 @@ body {
 }
 
 #mode-toggle-container {
-    margin-top: 10px;
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    position: relative;
+    gap: 6px;
 }
 
 .mode-error-message {
@@ -485,7 +561,8 @@ body {
 }
 
 #farmer-sidebar,
-#player-sidebar {
+#player-sidebar,
+#player-library {
     position: fixed;
     top: 20px;
     right: 20px;
@@ -540,22 +617,21 @@ body {
     display: none; // Hidden by default, shown in player mode
 }
 
+// Mirror of the right sidebar, anchored to the left edge
+#player-library {
+    display: none; // Hidden by default, shown in player mode
+    right: auto;
+    left: 20px;
+}
+
 #settings-container {
     position: relative;
-    background-color: rgba(255, 255, 255, 0.75);
-    border-radius: 12px;
+    .panel-surface();
     padding: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     min-width: 200px;
-    font-family: Arial, sans-serif;
     
     h3 {
-        margin: 0 0 12px 0;
-        font-size: 18px;
-        color: #2e7d32;
-        text-align: center;
-        border-bottom: 2px solid #2e7d32;
-        padding-bottom: 8px;
+        .panel-heading();
     }
     
     .setting-item {
@@ -593,20 +669,12 @@ body {
 
 #stats-container {
     position: relative;
-    background-color: rgba(255, 255, 255, 0.75);
-    border-radius: 12px;
+    .panel-surface();
     padding: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     min-width: 200px;
-    font-family: Arial, sans-serif;
     
     h3 {
-        margin: 0 0 12px 0;
-        font-size: 18px;
-        color: #2e7d32;
-        text-align: center;
-        border-bottom: 2px solid #2e7d32;
-        padding-bottom: 8px;
+        .panel-heading();
     }
     
     .stat-item {
@@ -662,45 +730,18 @@ body {
     align-items: center;
     
     .control-button {
-        background-color: #2e7d32;
-        border: 2px solid #2e7d32;
-        border-radius: 8px;
+        .button-base();
+        .button-solid();
         padding: 10px 16px;
         font-size: 14px;
-        font-weight: bold;
-        color: white;
-        cursor: pointer;
-        transition: all 0.2s ease;
         width: 200px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        font-family: Arial, sans-serif;
-        
-        &:hover {
-            background-color: #1b5e20;
-            border-color: #1b5e20;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-        }
-        
-        &:active {
-            transform: translateY(0);
-        }
-        
-        i {
-            font-size: 12px;
-        }
     }
 }
 
 // Player sidebar styles
 #player-emoji-container {
-    background-color: rgba(255, 255, 255, 0.75);
-    border-radius: 12px;
+    .panel-surface();
     padding: 4px 24px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -747,20 +788,10 @@ body {
     }
 }
 
+// Display-only preview of the player being designed
 .spawn-emoji {
     font-size: 80px;
-    cursor: pointer;
-    transition: transform 0.2s ease, filter 0.2s ease;
     user-select: none;
-    
-    &:hover {
-        transform: scale(1.1);
-        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-    }
-    
-    &:active {
-        transform: scale(0.95);
-    }
 }
 
 .skin-tone-picker {
@@ -866,20 +897,12 @@ body {
 }
 
 #ai-settings-container {
-    background-color: rgba(255, 255, 255, 0.75);
-    border-radius: 12px;
+    .panel-surface();
     padding: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     min-width: 200px;
-    font-family: Arial, sans-serif;
     
     h3 {
-        margin: 0 0 16px 0;
-        font-size: 18px;
-        color: #2e7d32;
-        text-align: center;
-        border-bottom: 2px solid #2e7d32;
-        padding-bottom: 8px;
+        .panel-heading(16px);
     }
     
     .ai-setting-item {
@@ -908,7 +931,7 @@ body {
                 -webkit-appearance: none;
                 appearance: none;
                 height: 6px;
-                background: #ddd;
+                background: #bbb;
                 border-radius: 3px;
                 outline: none;
                 
@@ -1208,55 +1231,143 @@ body {
     }
 }
 
-// Playback controls
+// Playback controls (fixed to bottom center, player mode only)
 #playback-controls-container {
-    background-color: rgba(255, 255, 255, 0.75);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    min-width: 200px;
-    font-family: Arial, sans-serif;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: none; // Shown in player mode
+    gap: 8px;
+    padding: 8px;
+    .panel-surface();
     
-    h3 {
-        margin: 0 0 12px 0;
+    .playback-button {
+        .button-base();
+        .button-solid();
+        padding: 8px 20px;
         font-size: 18px;
-        color: #2e7d32;
-        text-align: center;
-        border-bottom: 2px solid #2e7d32;
-        padding-bottom: 8px;
+        min-width: 64px;
     }
-    
-    .playback-buttons {
+}
+
+// Create / save / cancel buttons at the bottom of the player editor
+#player-editor-actions {
+    .editor-actions-row {
         display: flex;
         gap: 8px;
-        justify-content: center;
+    }
+    
+    .editor-button {
+        .button-base();
+        flex: 1;
+        padding: 10px 12px;
+        font-size: 14px;
         
-        .playback-button {
-            background-color: #2e7d32;
-            border: 2px solid #2e7d32;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-size: 18px;
-            color: white;
-            cursor: pointer;
-            transition: all 0.2s ease;
+        &.primary {
+            .button-solid();
+            flex: 2;
+        }
+        
+        &.secondary {
+            .button-outline();
+        }
+    }
+}
+
+// Panel of saved player types inside the left sidebar
+#player-library-panel {
+    .panel-surface();
+    padding: 16px;
+    min-width: 200px;
+    
+    h3 {
+        .panel-heading();
+    }
+    
+    #player-library-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+        gap: 12px;
+    }
+    
+    #player-library-empty {
+        color: #666;
+        font-size: 13px;
+        text-align: center;
+        line-height: 1.4;
+    }
+}
+
+.profile-card {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    background-color: #f5f5f5;
+    border: 2px solid #d0d0d0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    
+    &.editing {
+        border-color: #2e7d32;
+        background-color: #e8f5e9;
+    }
+    
+    .profile-emoji {
+        font-size: 6em;
+        line-height: 1;
+        user-select: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    
+    .profile-actions {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        padding: 8px 12px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        
+        button {
+            .button-base();
+            .button-solid();
             flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: Arial, sans-serif;
-            min-width: 60px;
+            border-radius: 6px;
+            font-size: 12px;
+            gap: 6px;
             
-            &:hover {
-                background-color: #1b5e20;
-                border-color: #1b5e20;
-                transform: translateY(-1px);
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            &.profile-edit {
+                .button-solid(#616161, #424242);
             }
             
-            &:active {
-                transform: translateY(0);
+            &.profile-delete {
+                .button-solid(#c62828, #8e0000);
             }
+            
+            i {
+                font-size: 10px;
+            }
+        }
+    }
+    
+    &:hover {
+        .profile-emoji {
+            opacity: 0.2;
+            transform: scale(0.9);
+        }
+        
+        .profile-actions {
+            opacity: 1;
+            pointer-events: auto;
         }
     }
 }

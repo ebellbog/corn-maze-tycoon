@@ -33,6 +33,9 @@ class CornMazeGame {
             { blocks: [] }, // Medium priority
             { blocks: [] }  // Low priority
         ];
+        this.playerProfiles = []; // Saved player types shown in the left sidebar
+        this.editingProfileId = null; // Profile loaded into the editor, or null when creating
+        this.nextProfileId = 1;
         this.dragState = { // Track drag-and-drop state
             draggedBlock: null,
             sourceTier: null,
@@ -54,6 +57,8 @@ class CornMazeGame {
             // Start position is plowed
             this.grid[this.tractorPosition.y][this.tractorPosition.x] = 1;
         }
+        
+        this.loadProfilesFromLocalStorage();
         
         // Save initial state
         this.saveState();
@@ -118,7 +123,8 @@ class CornMazeGame {
         // Calculate available viewport space, accounting for margins
         const margin = 80; // Margin on each side (40px padding + 40px buffer)
         const availableWidth = $(window).width() - (margin * 2);
-        const availableHeight = $(window).height() - (margin * 2);
+        // Extra vertical room for the fixed mode toggle (top) and playback controls (bottom)
+        const availableHeight = $(window).height() - (margin * 2) - 40;
         
         // Calculate maximum cell size that fits both width and height
         const maxCellWidth = Math.floor(availableWidth / this.width);
@@ -236,6 +242,8 @@ class CornMazeGame {
             // Show player controls, hide farmer controls
             $('#farmer-sidebar').css('display', 'none');
             $('#player-sidebar').css('display', 'flex');
+            $('#player-library').css('display', 'flex');
+            $('#playback-controls-container').css('display', 'flex');
             // Hide grid lines
             $('#game-board').addClass('player-mode');
             // Update player UI
@@ -244,6 +252,8 @@ class CornMazeGame {
             // Show farmer controls, hide player controls
             $('#farmer-sidebar').css('display', 'flex');
             $('#player-sidebar').css('display', 'none');
+            $('#player-library').css('display', 'none');
+            $('#playback-controls-container').css('display', 'none');
             // Show grid lines
             $('#game-board').removeClass('player-mode');
             // Stop all players
@@ -272,11 +282,6 @@ class CornMazeGame {
             this.navigateEmojiNext();
         });
         
-        // Spawn button / emoji click
-        $('#spawn-emoji').on('click', () => {
-            this.spawnPlayer();
-        });
-        
         // Skin tone selection
         $('.skin-tone-button').on('click', (e) => {
             const skinTone = $(e.currentTarget).attr('data-tone');
@@ -290,6 +295,21 @@ class CornMazeGame {
         
         // Initialize skin tone button state
         this.updateSkinToneButtons();
+        
+        // Editor action buttons
+        $('#create-player-button').on('click', () => this.createProfile());
+        $('#reset-player-button').on('click', () => this.resetEditor());
+        $('#save-player-button').on('click', () => this.saveProfile());
+        $('#cancel-edit-button').on('click', () => this.cancelEdit());
+        
+        // Player library card actions
+        $('#player-library-list')
+            .on('click', '.profile-test', (e) => this.testProfile(this.getCardProfileId(e)))
+            .on('click', '.profile-edit', (e) => this.editProfile(this.getCardProfileId(e)))
+            .on('click', '.profile-delete', (e) => this.deleteProfile(this.getCardProfileId(e)));
+        
+        this.updateEditorButtons();
+        this.renderProfiles();
         
         // Speed slider
         $('#speed-slider').on('input', () => {
@@ -317,78 +337,80 @@ class CornMazeGame {
     }
     
     setupSidebarResize() {
-        const game = this;
-        let isResizing = false;
-        let startX = 0;
-        let startWidth = 0;
+        // Each side gets its own grip; the visible sidebar on that side is the one resized.
+        // dir: which way dragging widens the sidebar (right sidebar grows leftward, left grows rightward)
+        const sides = [
+            { selector: '#player-sidebar:visible, #farmer-sidebar:visible', dir: -1 },
+            { selector: '#player-library:visible', dir: 1 }
+        ];
         
-        // Create resize grip element
-        const grip = $('<div class="sidebar-resize-grip"></div>');
-        $('body').append(grip);
+        const grips = sides.map(side => {
+            const grip = $('<div class="sidebar-resize-grip"></div>');
+            $('body').append(grip);
+            return { ...side, grip };
+        });
         
-        // Function to update grip position
-        const updateGripPosition = () => {
-            const sidebar = $('#player-sidebar:visible, #farmer-sidebar:visible');
-            if (sidebar.length) {
-                const rect = sidebar[0].getBoundingClientRect();
-                const gripHeight = 120;
-                grip.css({
-                    'left': `${rect.left - 18}px`,
-                    'top': `${rect.top + (rect.height / 2) - (gripHeight / 2)}px`
-                });
-                grip.show();
-            } else {
-                grip.hide();
+        const updateGripPositions = () => {
+            for (const { selector, dir, grip } of grips) {
+                const sidebar = $(selector);
+                if (sidebar.length) {
+                    const rect = sidebar[0].getBoundingClientRect();
+                    const gripHeight = 120;
+                    grip.css({
+                        'left': `${dir < 0 ? rect.left - 18 : rect.right + 10}px`,
+                        'top': `${rect.top + (rect.height / 2) - (gripHeight / 2)}px`
+                    });
+                    grip.show();
+                } else {
+                    grip.hide();
+                }
             }
         };
         
-        // Update grip position initially and on window resize/scroll
-        updateGripPosition();
-        $(window).on('resize', updateGripPosition);
+        updateGripPositions();
+        $(window).on('resize', updateGripPositions);
+        $('#player-sidebar, #farmer-sidebar, #player-library').on('scroll', updateGripPositions);
         
-        // Update grip position when sidebar scrolls
-        $('#player-sidebar, #farmer-sidebar').on('scroll', updateGripPosition);
-        
-        // Update grip position when mode changes
+        // Update grip positions when mode changes
         const originalUpdateMode = this.updateMode.bind(this);
         this.updateMode = function() {
             originalUpdateMode();
-            setTimeout(updateGripPosition, 10);
+            setTimeout(updateGripPositions, 10);
         };
         
-        // Handle mousedown on the grip
-        grip.on('mousedown', function(e) {
-            e.preventDefault();
-            const sidebar = $('#player-sidebar:visible, #farmer-sidebar:visible');
-            if (!sidebar.length) return;
-            
-            isResizing = true;
-            startX = e.clientX;
-            startWidth = sidebar.outerWidth();
-            
-            grip.addClass('resizing');
-            $('body').css('cursor', 'ew-resize');
-            $('body').css('user-select', 'none');
+        // Library contents change height as players are added/removed
+        this.updateGripPositions = updateGripPositions;
+        
+        let active = null; // { selector, dir, grip, startX, startWidth }
+        
+        grips.forEach(side => {
+            side.grip.on('mousedown', function(e) {
+                e.preventDefault();
+                const sidebar = $(side.selector);
+                if (!sidebar.length) return;
+                
+                active = { ...side, startX: e.clientX, startWidth: sidebar.outerWidth() };
+                side.grip.addClass('resizing');
+                $('body').css({ 'cursor': 'ew-resize', 'user-select': 'none' });
+            });
         });
         
         $(document).on('mousemove', function(e) {
-            if (!isResizing) return;
+            if (!active) return;
             
             e.preventDefault();
-            const deltaX = startX - e.clientX; // Reversed because we're dragging from the left
-            const newWidth = Math.max(280, Math.min(600, startWidth + deltaX));
+            const deltaX = (e.clientX - active.startX) * active.dir;
+            const newWidth = Math.max(280, Math.min(600, active.startWidth + deltaX));
             
-            const sidebar = $('#player-sidebar:visible, #farmer-sidebar:visible');
-            sidebar.css('width', `${newWidth}px`);
-            updateGripPosition();
+            $(active.selector).css('width', `${newWidth}px`);
+            updateGripPositions();
         });
         
         $(document).on('mouseup', function() {
-            if (isResizing) {
-                isResizing = false;
-                grip.removeClass('resizing');
-                $('body').css('cursor', '');
-                $('body').css('user-select', '');
+            if (active) {
+                active.grip.removeClass('resizing');
+                active = null;
+                $('body').css({ 'cursor': '', 'user-select': '' });
             }
         });
     }
@@ -937,47 +959,168 @@ class CornMazeGame {
         this.updatePlayerUI();
     }
     
-    spawnPlayer() {
-        if (!this.startPosition) {
+    getCardProfileId(e) {
+        return parseInt($(e.currentTarget).closest('.profile-card').attr('data-profile-id'));
+    }
+    
+    findProfile(id) {
+        return this.playerProfiles.find(p => p.id === id);
+    }
+    
+    // Snapshot of whatever is currently configured in the right sidebar
+    getEditorProfile() {
+        return {
+            emojiIndex: this.currentEmojiIndex,
+            skinTone: this.currentSkinTone,
+            emoji: this.currentEmoji,
+            movesPerSec: parseFloat($('#speed-slider').val()),
+            tiers: JSON.parse(JSON.stringify(this.currentTierConfig))
+        };
+    }
+    
+    // Load a profile's settings into the right sidebar controls
+    loadProfileIntoEditor(profile) {
+        this.currentEmojiIndex = profile.emojiIndex;
+        this.currentSkinTone = profile.skinTone;
+        this.currentEmoji = this.getDisplayEmoji();
+        this.currentTierConfig = JSON.parse(JSON.stringify(profile.tiers));
+        $('#speed-slider').val(profile.movesPerSec);
+        this.renderTiers();
+        this.updatePlayerUI();
+        this.updateSkinToneButtons();
+    }
+    
+    // Return the editor to a blank new player
+    resetEditor(randomize = false) {
+        this.editingProfileId = null;
+        this.currentEmojiIndex = 0;
+        this.currentSkinTone = '';
+        if (randomize) {
+            this.randomizeEmoji();
+        }
+        this.loadProfileIntoEditor({
+            emojiIndex: this.currentEmojiIndex,
+            skinTone: this.currentSkinTone,
+            movesPerSec: 2,
+            tiers: [{ blocks: [] }, { blocks: [] }, { blocks: [] }]
+        });
+        this.updateEditorButtons();
+        this.renderProfiles();
+    }
+    
+    updateEditorButtons() {
+        const editing = this.editingProfileId !== null;
+        $('.editor-actions-row[data-state="create"]').toggle(!editing);
+        $('.editor-actions-row[data-state="edit"]').toggle(editing);
+    }
+    
+    createProfile() {
+        this.playerProfiles.push({ id: this.nextProfileId++, ...this.getEditorProfile() });
+        this.saveProfilesToLocalStorage();
+        // Start fresh for the next player
+        this.resetEditor(true);
+    }
+    
+    editProfile(id) {
+        const profile = this.findProfile(id);
+        if (!profile) return;
+        this.editingProfileId = id;
+        this.loadProfileIntoEditor(profile);
+        this.updateEditorButtons();
+        this.renderProfiles();
+    }
+    
+    saveProfile() {
+        const profile = this.findProfile(this.editingProfileId);
+        if (profile) {
+            Object.assign(profile, this.getEditorProfile());
+            this.saveProfilesToLocalStorage();
+        }
+        this.resetEditor(true);
+    }
+    
+    cancelEdit() {
+        this.resetEditor();
+    }
+    
+    deleteProfile(id) {
+        this.playerProfiles = this.playerProfiles.filter(p => p.id !== id);
+        this.saveProfilesToLocalStorage();
+        if (this.editingProfileId === id) {
+            this.resetEditor();
+        } else {
+            this.renderProfiles();
+        }
+    }
+    
+    renderProfiles() {
+        const list = $('#player-library-list').empty();
+        $('#player-library-empty').toggle(this.playerProfiles.length === 0);
+        
+        for (const profile of this.playerProfiles) {
+            const card = $(`
+                <div class="profile-card">
+                    <div class="profile-emoji"></div>
+                    <div class="profile-actions">
+                        <button class="profile-test"><i class="fas fa-play"></i> Test</button>
+                        <button class="profile-edit"><i class="fas fa-pen"></i> Edit</button>
+                        <button class="profile-delete"><i class="fas fa-trash"></i> Delete</button>
+                    </div>
+                </div>
+            `);
+            card.attr('data-profile-id', profile.id);
+            card.find('.profile-emoji').text(profile.emoji);
+            card.toggleClass('editing', profile.id === this.editingProfileId);
+            list.append(card);
+        }
+        
+        // Sidebar height changes with the list, so keep the resize grips centered
+        if (this.updateGripPositions) {
+            this.updateGripPositions();
+        }
+    }
+    
+    saveProfilesToLocalStorage() {
+        try {
+            localStorage.setItem('cornMazeTycoon_players', JSON.stringify({
+                nextId: this.nextProfileId,
+                profiles: this.playerProfiles
+            }));
+        } catch (e) {
+            console.warn('Failed to save players to localStorage:', e);
+        }
+    }
+    
+    loadProfilesFromLocalStorage() {
+        try {
+            const saved = localStorage.getItem('cornMazeTycoon_players');
+            if (!saved) return;
+            const data = JSON.parse(saved);
+            this.playerProfiles = data.profiles || [];
+            this.nextProfileId = data.nextId || (Math.max(0, ...this.playerProfiles.map(p => p.id)) + 1);
+        } catch (e) {
+            console.warn('Failed to load players from localStorage:', e);
+        }
+    }
+    
+    // Put a saved player into the maze and start them moving
+    testProfile(id) {
+        const profile = this.findProfile(id);
+        if (!profile || !this.startPosition) {
             return; // Can't spawn without start position
         }
         
-        // Get current AI settings
-        const movesPerSec = parseFloat($('#speed-slider').val());
-        const speed = 1000 / movesPerSec; // Convert moves/sec to milliseconds
+        const speed = 1000 / profile.movesPerSec; // Convert moves/sec to milliseconds
         
-        // Deep clone the tier configuration for this player
-        const tiersCopy = JSON.parse(JSON.stringify(this.currentTierConfig));
-        
-        // Create AI brain with tier configuration
+        // Deep clone the tier configuration so the maze player is independent of the profile
+        const tiersCopy = JSON.parse(JSON.stringify(profile.tiers));
         const brain = new AIBrain(tiersCopy, speed);
         
-        // Create player
-        const player = new Player(this.currentEmoji, brain, this.startPosition, this);
+        const player = new Player(profile.emoji, brain, this.startPosition, this);
         player.isPaused = this.isPaused;
         this.players.push(player);
-        
-        // Start player movement
         player.startMoving();
         
-        // Reset tier configuration for next player (deep clean)
-        this.currentTierConfig = [
-            { blocks: [] },
-            { blocks: [] },
-            { blocks: [] }
-        ];
-        
-        // Clear all tier DOMs explicitly
-        $('.tier-blocks').empty();
-        
-        // Render empty tiers
-        this.renderTiers();
-        
-        // Update emoji for next player
-        this.currentEmoji = Player.getRandomEmoji();
-        this.updatePlayerUI();
-        
-        // Render
         this.render();
     }
     

@@ -9,18 +9,30 @@
 <body>
     <div id="game-container">
         <div id="game-board"></div>
-        <div id="mode-toggle-container">
-            <div class="mode-toggle-label">Game Mode</div>
-            <label class="mode-toggle">
-                <input type="checkbox" id="mode-toggle">
-                <span class="toggle-slider">
-                    <span class="toggle-label toggle-label-left">Farmer</span>
-                    <span class="toggle-label toggle-label-right">Player</span>
-                </span>
-            </label>
-            <div id="mode-error-message" class="mode-error-message">
-                Complete the maze first! Add both entrance and exit.
-            </div>
+    </div>
+    <div id="mode-toggle-container">
+        <div class="mode-toggle-label">Game Mode</div>
+        <label class="mode-toggle">
+            <input type="checkbox" id="mode-toggle">
+            <span class="toggle-slider">
+                <span class="toggle-label toggle-label-left">Farmer</span>
+                <span class="toggle-label toggle-label-right">Player</span>
+            </span>
+        </label>
+        <div id="mode-error-message" class="mode-error-message">
+            Complete the maze first! Add both entrance and exit.
+        </div>
+    </div>
+    <div id="playback-controls-container">
+        <button id="pause-play-button" class="playback-button" title="Pause / play">⏸</button>
+        <button id="playback-speed-button" class="playback-button" title="Playback speed">1x</button>
+        <button id="clear-players-button" class="playback-button" title="Clear all players">↻</button>
+    </div>
+    <div id="player-library">
+        <div id="player-library-panel">
+            <h3>Players</h3>
+            <div id="player-library-list"></div>
+            <div id="player-library-empty">No players yet. Design one on the right, then click “Create new player.”</div>
         </div>
     </div>
     <div id="farmer-sidebar">
@@ -166,12 +178,14 @@
                 </div>
             </div>
         </div>
-        <div id="playback-controls-container">
-            <h3>Playback Controls</h3>
-            <div class="playback-buttons">
-                <button id="pause-play-button" class="playback-button">⏸</button>
-                <button id="playback-speed-button" class="playback-button">1x</button>
-                <button id="clear-players-button" class="playback-button" title="Clear all players">↻</button>
+        <div id="player-editor-actions">
+            <div class="editor-actions-row" data-state="create">
+                <button id="create-player-button" class="editor-button primary"><i class="fas fa-plus"></i> Create new player</button>
+                <button id="reset-player-button" class="editor-button secondary"><i class="fas fa-redo"></i> Reset</button>
+            </div>
+            <div class="editor-actions-row" data-state="edit">
+                <button id="save-player-button" class="editor-button primary"><i class="fas fa-check"></i> Save changes</button>
+                <button id="cancel-edit-button" class="editor-button secondary"><i class="fas fa-times"></i> Cancel</button>
             </div>
         </div>
     </div>
