@@ -3,6 +3,7 @@
 @grassAlt: #47634a;
 @moonlight: #e8e4c9;
 @warning: #f2a65a;
+@flashRed: #ff4d4d;
 
 * {
     box-sizing: border-box;
@@ -127,6 +128,30 @@ body {
     text-align: right;
 }
 
+// Both parts fade back to whatever color they had before, which depends on the .low state
+#timer.flash {
+    #timer-text {
+        animation: timer-text-flash 0.6s ease-out;
+    }
+    
+    #timer-fill {
+        animation: timer-fill-flash 0.6s ease-out;
+    }
+}
+
+@keyframes timer-text-flash {
+    0%, 40% {
+        color: @flashRed;
+        transform: scale(1.2);
+    }
+}
+
+@keyframes timer-fill-flash {
+    0%, 40% {
+        background-color: @flashRed;
+    }
+}
+
 #timer.low {
     #timer-fill {
         background-color: @warning;
@@ -205,8 +230,51 @@ body {
     );
     transition: transform var(--move-duration) linear;
     
-    // The emoji walks left, so facing right is the flipped case
+    // The emoji walks left, so the other directions are turned from there
+    .sprite {
+        transition: transform 0.1s;
+    }
+    
     &[data-facing="right"] .sprite {
         transform: scaleX(-1);
+    }
+    
+    &[data-facing="up"] .sprite {
+        transform: rotate(90deg);
+    }
+    
+    &[data-facing="down"] .sprite {
+        transform: rotate(-90deg);
+    }
+}
+
+#board-wrapper {
+    position: relative; // The board clips its contents, so popovers live out here
+}
+
+#popover {
+    position: absolute;
+    left: calc((var(--x) + 0.5) * var(--cell-size));
+    top: calc(var(--y) * var(--cell-size));
+    transform: translate(-50%, calc(-100% - 8px));
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: @moonlight;
+    color: @nightSky;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    
+    // The little tail pointing down at the gravestone
+    &::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: @moonlight;
     }
 }

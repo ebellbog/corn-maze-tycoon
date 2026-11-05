@@ -9,7 +9,7 @@ export const SPRITES = {
     tree: { emoji: '🌳' },
     rock: { emoji: '🪨' },
     urn: { emoji: '⚱️' },
-    digger: { emoji: '🚶' }
+    digger: { emoji: '🚶‍♀️' }
 };
 
 // Sprites the level generator can pick from for "other obstacles"

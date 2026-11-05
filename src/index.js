@@ -9,6 +9,8 @@ const SETTINGS_PANEL_WIDTH = 280;
 const MOVE_DURATION = 150; // Time to cross one square, in ms
 const STORAGE_KEY = 'the-brave-digger';
 const STORAGE_VERSION = 1;
+const INVESTIGATE_COST = 3; // Seconds spent investigating a gravestone
+const POPOVER_DURATION = 1500; // How long an investigation message stays up, in ms
 
 const MOVE_KEYS = {
     arrowup: 'up', w: 'up',
@@ -37,6 +39,8 @@ class CemeteryGame {
         this.digger = null; // { x, y }, or null until an entry point is chosen
         this.heldKeys = []; // Movement keys currently down, most recently pressed last
         this.isMoving = false;
+        this.facing = 'down';
+        this.popoverTimeout = null;
         this.timeRemaining = 0; // Seconds left; each step costs one
         this.board = $('#game-board');
         
@@ -88,6 +92,14 @@ class CemeteryGame {
                 return;
             }
             
+            if (key === ' ') {
+                e.preventDefault(); // Avoid scrolling, or pressing a focused button
+                if (!e.originalEvent.repeat) {
+                    this.investigate();
+                }
+                return;
+            }
+            
             if (MOVE_KEYS[key]) {
                 e.preventDefault(); // Avoid scrolling
                 if (!this.heldKeys.includes(key)) {
@@ -98,6 +110,11 @@ class CemeteryGame {
         });
         
         $(document).on('keyup', (e) => {
+            // Some browsers press a focused button on spacebar keyup instead of keydown
+            if (e.key === ' ' && !$(e.target).is('input')) {
+                e.preventDefault();
+            }
+            
             const key = e.key.toLowerCase();
             this.heldKeys = this.heldKeys.filter(heldKey => heldKey !== key);
         });
@@ -215,6 +232,7 @@ class CemeteryGame {
     
     // Starts over on the current layout: back to choosing an entry point, with a full timer
     restart() {
+        this.hidePopover();
         this.digger = null;
         this.timeRemaining = this.settings.timeAllowance;
         
@@ -305,10 +323,15 @@ class CemeteryGame {
         this.digger = { x, y };
         this.board.find('.entry-point').removeClass('entry-point');
         
+        // Face into the cemetery, away from the border we came in on
+        const { width, height } = this.level;
+        this.facing = x === 0 ? 'right' : x === width - 1 ? 'left' : y === 0 ? 'down' : 'up';
+        
         const avatar = $('<div id="digger-avatar">').append(createSpriteElement('digger'));
         this.board.append(avatar);
         
         this.renderDigger();
+        this.renderFacing();
         this.renderStatus();
     }
     
@@ -316,6 +339,65 @@ class CemeteryGame {
         const avatar = $('#digger-avatar')[0];
         avatar.style.setProperty('--x', this.digger.x);
         avatar.style.setProperty('--y', this.digger.y);
+    }
+    
+    renderFacing() {
+        $('#digger-avatar').attr('data-facing', this.facing);
+    }
+    
+    getFacingSquare() {
+        return {
+            x: this.digger.x + DIRECTIONS[this.facing].x,
+            y: this.digger.y + DIRECTIONS[this.facing].y
+        };
+    }
+    
+    investigate() {
+        if (!this.digger || this.isOutOfTime()) {
+            return;
+        }
+        
+        const { x, y } = this.getFacingSquare();
+        if (this.level.sprites[y]?.[x] !== 'gravestone') {
+            return;
+        }
+        
+        if (this.timeRemaining < INVESTIGATE_COST) {
+            this.flashTimer();
+            return;
+        }
+        
+        this.timeRemaining -= INVESTIGATE_COST;
+        this.renderTimer();
+        if (this.isOutOfTime()) {
+            this.renderStatus();
+        }
+        this.showPopover(x, y, 'Nothing found');
+    }
+    
+    // Signals that there isn't enough time left for what was just attempted
+    flashTimer() {
+        const timer = $('#timer');
+        timer.removeClass('flash');
+        void timer[0].offsetWidth; // Reflow, so the animation restarts if it's already running
+        timer.addClass('flash').one('animationend', () => timer.removeClass('flash'));
+    }
+    
+    // A speech bubble above the given square, which goes away on its own
+    showPopover(x, y, message) {
+        this.hidePopover();
+        
+        const popover = $('<div id="popover">').text(message);
+        popover[0].style.setProperty('--x', x);
+        popover[0].style.setProperty('--y', y);
+        $('#board-wrapper').append(popover);
+        
+        this.popoverTimeout = setTimeout(() => this.hidePopover(), POPOVER_DURATION);
+    }
+    
+    hidePopover() {
+        clearTimeout(this.popoverTimeout);
+        $('#popover').remove();
     }
     
     isOpen(x, y) {
@@ -331,10 +413,9 @@ class CemeteryGame {
         const newX = this.digger.x + DIRECTIONS[direction].x;
         const newY = this.digger.y + DIRECTIONS[direction].y;
         
-        // Facing left and right flips the sprite; up and down keep the last one
-        if (direction === 'left' || direction === 'right') {
-            $('#digger-avatar').attr('data-facing', direction);
-        }
+        // Turning to face an obstacle takes no time, so it's what lets us investigate it
+        this.facing = direction;
+        this.renderFacing();
         
         if (!this.isOpen(newX, newY)) {
             return;
@@ -343,6 +424,7 @@ class CemeteryGame {
         this.digger.x = newX;
         this.digger.y = newY;
         this.timeRemaining--;
+        this.hidePopover();
         this.renderDigger();
         this.renderTimer();
         if (this.isOutOfTime()) {
