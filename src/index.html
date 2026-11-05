@@ -1,193 +1,45 @@
 <html lang="en">
 
 <head>
-    <script defer="" src="https://use.fontawesome.com/releases/v6.4.1/js/all.js"></script>
     <meta name="viewport" content="width=device-width, user-scalable=no">
-    <title>Corn Maze Tycoon</title>
+    <title>The Brave Digger</title>
 </head>
 
 <body>
+    <div id="settings-panel">
+        <h1>The Brave Digger</h1>
+        <div class="setting-item">
+            <label for="cemetery-width">Width</label>
+            <input type="number" autocomplete="off" id="cemetery-width" min="3" max="51" step="2">
+        </div>
+        <div class="setting-item">
+            <label for="cemetery-height">Height</label>
+            <input type="number" autocomplete="off" id="cemetery-height" min="3" max="51" step="2">
+        </div>
+        <div class="setting-item">
+            <label for="cemetery-gravestones">Gravestones</label>
+            <input type="number" autocomplete="off" id="cemetery-gravestones">
+        </div>
+        <div class="setting-hint" id="gravestones-hint"></div>
+        <div class="setting-item">
+            <label for="cemetery-obstacles">Other obstacles</label>
+            <input type="number" autocomplete="off" id="cemetery-obstacles" min="0">
+        </div>
+        <div class="setting-item">
+            <label for="cemetery-time">Time allowance (sec)</label>
+            <input type="number" autocomplete="off" id="cemetery-time" min="1">
+        </div>
+        <button id="restart-button">Restart (T)</button>
+        <button id="regenerate-button">New layout (R)</button>
+        <div id="capacity-warning"></div>
+    </div>
     <div id="game-container">
+        <div id="status-message"></div>
+        <div id="timer">
+            <div id="timer-bar"><div id="timer-fill"></div></div>
+            <div id="timer-text"></div>
+        </div>
         <div id="game-board"></div>
-    </div>
-    <div id="mode-toggle-container">
-        <div class="mode-toggle-label">Game Mode</div>
-        <label class="mode-toggle">
-            <input type="checkbox" id="mode-toggle">
-            <span class="toggle-slider">
-                <span class="toggle-label toggle-label-left">Farmer</span>
-                <span class="toggle-label toggle-label-right">Player</span>
-            </span>
-        </label>
-        <div id="mode-error-message" class="mode-error-message">
-            Complete the maze first! Add both entrance and exit.
-        </div>
-    </div>
-    <div id="playback-controls-container">
-        <button id="pause-play-button" class="playback-button" title="Pause / play">⏸</button>
-        <button id="playback-speed-button" class="playback-button" title="Playback speed">1x</button>
-        <button id="clear-players-button" class="playback-button" title="Clear all players">↻</button>
-    </div>
-    <div id="player-library">
-        <div id="player-library-panel">
-            <h3>Players</h3>
-            <div id="player-library-list"></div>
-            <div id="player-library-empty">No players yet. Design one on the right, then click “Create new player.”</div>
-        </div>
-    </div>
-    <div id="farmer-sidebar">
-        <div id="settings-container">
-            <h3>Maze Settings</h3>
-            <div class="setting-item">
-                <label for="maze-width">Width:</label>
-                <input type="number" id="maze-width" min="7" max="30" value="12">
-            </div>
-            <div class="setting-item">
-                <label for="maze-height">Height:</label>
-                <input type="number" id="maze-height" min="7" max="30" value="12">
-            </div>
-        </div>
-        <div id="stats-container">
-            <h3>Maze Stats</h3>
-            <div class="stat-item">
-                <span class="stat-label">Pathway Plowed:</span>
-                <span class="stat-value" id="total-plowed">0</span>
-            </div>
-            <div class="stat-item hoverable" id="shortest-path-stat">
-                <span class="stat-label">
-                    <i class="fas fa-eye hover-icon"></i> Shortest Path:
-                </span>
-                <span class="stat-value" id="shortest-path">—</span>
-            </div>
-            <div class="stat-item hoverable" id="longest-path-stat">
-                <span class="stat-label">
-                    <i class="fas fa-eye hover-icon"></i> Longest Path:
-                </span>
-                <span class="stat-value" id="longest-path">—</span>
-            </div>
-        </div>
-        <div id="controls-container">
-            <button id="reset-button" class="control-button">
-                <i class="fas fa-redo"></i> Reset (R)
-            </button>
-            <button id="undo-button" class="control-button">
-                <i class="fas fa-undo"></i> Undo (U)
-            </button>
-        </div>
-    </div>
-    <div id="player-sidebar">
-        <div id="player-emoji-container">
-            <div class="emoji-picker">
-                <div class="emoji-picker-row">
-                    <button id="emoji-prev" class="emoji-nav-button">◀</button>
-                    <div id="spawn-emoji" class="spawn-emoji">👨</div>
-                    <button id="emoji-next" class="emoji-nav-button">▶</button>
-                </div>
-                <div id="skin-tone-picker" class="skin-tone-picker">
-                <button class="skin-tone-button" data-tone="" title="Default">🚫</button>
-                <button class="skin-tone-button" data-tone="🏻" data-color="#FFDBAC" title="Light"></button>
-                <button class="skin-tone-button" data-tone="🏼" data-color="#F1C27D" title="Medium-Light"></button>
-                <button class="skin-tone-button" data-tone="🏽" data-color="#E0AC69" title="Medium"></button>
-                <button class="skin-tone-button" data-tone="🏾" data-color="#C68642" title="Medium-Dark"></button>
-                <button class="skin-tone-button" data-tone="🏿" data-color="#8D5524" title="Dark"></button>
-                </div>
-                <button id="randomize-emoji" class="randomize-button" title="Randomize emoji">Random</button>
-            </div>
-        </div>
-        <div id="ai-settings-container">
-            <h3>AI Settings</h3>
-            
-            <div class="ai-setting-item">
-                <label for="speed-slider">Movement Speed:</label>
-                <div class="slider-container">
-                    <input type="range" id="speed-slider" min="0.5" max="10" step="0.5" value="2">
-                    <span class="slider-value" id="speed-value">2/s</span>
-                </div>
-                <div class="slider-labels">
-                    <span>Slow</span>
-                    <span>Fast</span>
-                </div>
-            </div>
-            
-            <h4 class="tier-section-title">Logic Priority</h4>
-            
-            <div class="priority-tiers">
-                <div class="priority-tier" data-tier="0">
-                    <div class="tier-label">High Priority</div>
-                    <div class="tier-blocks" data-tier-index="0"></div>
-                </div>
-                
-                <div class="priority-tier" data-tier="1">
-                    <div class="tier-label">Medium Priority</div>
-                    <div class="tier-blocks" data-tier-index="1"></div>
-                </div>
-                
-                <div class="priority-tier" data-tier="2">
-                    <div class="tier-label">Low Priority</div>
-                    <div class="tier-blocks" data-tier-index="2"></div>
-                </div>
-            </div>
-            
-            <h4 class="tier-section-title">Available Logic Blocks</h4>
-            <div id="logic-block-pool">
-                <div class="logic-block toggleable" draggable="true" data-block-type="wallFollowing" data-mode="right">
-                    <div class="block-icon">→</div>
-                    <div class="block-label">Right Wall</div>
-                    <label class="block-toggle">
-                        <input type="checkbox" class="toggle-switch">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                
-                <div class="logic-block" draggable="true" data-block-type="lineOfSight">
-                    <div class="block-icon">❗</div>
-                    <div class="block-label">Line of Sight</div>
-                </div>
-                
-                <div class="logic-block" draggable="true" data-block-type="towardExit">
-                    <div class="block-icon">🧭</div>
-                    <div class="block-label">Toward Exit</div>
-                </div>
-                
-                <div class="logic-block" draggable="true" data-block-type="checkMap">
-                    <div class="block-icon">🗺️</div>
-                    <div class="block-label">Check Map</div>
-                </div>
-                
-                <div class="logic-block toggleable" draggable="true" data-block-type="backtracking" data-mode="avoid">
-                    <div class="block-icon">🧠</div>
-                    <div class="block-label">Avoid Backtracking</div>
-                    <label class="block-toggle">
-                        <input type="checkbox" class="toggle-switch">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                
-                <div class="logic-block toggleable" draggable="true" data-block-type="social" data-mode="follow">
-                    <div class="block-icon">❤️</div>
-                    <div class="block-label">Follow Others</div>
-                    <label class="block-toggle">
-                        <input type="checkbox" class="toggle-switch">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                
-                <div class="logic-block" draggable="true" data-block-type="randomGuesser">
-                    <div class="block-icon">🎲</div>
-                    <div class="block-label">Random Guesser</div>
-                </div>
-            </div>
-        </div>
-        <div id="player-editor-actions">
-            <div class="editor-actions-row" data-state="create">
-                <button id="create-player-button" class="editor-button primary"><i class="fas fa-plus"></i> Create new player</button>
-                <button id="reset-player-button" class="editor-button secondary"><i class="fas fa-redo"></i> Reset</button>
-            </div>
-            <div class="editor-actions-row" data-state="edit">
-                <button id="save-player-button" class="editor-button primary"><i class="fas fa-check"></i> Save changes</button>
-                <button id="cancel-edit-button" class="editor-button secondary"><i class="fas fa-times"></i> Cancel</button>
-            </div>
-        </div>
     </div>
 </body>
 
