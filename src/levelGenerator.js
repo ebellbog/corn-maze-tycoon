@@ -9,7 +9,7 @@
 // don't count). This can run out of safe squares before everything is placed, and how
 // soon depends on the layout, so a shortfall triggers a few fresh attempts.
 
-import { OBSTACLE_SPRITES } from './sprites.js';
+import { GRAVESTONE_VARIANTS, OBSTACLE_SPRITES } from './sprites.js';
 
 // Same convention as AIBrain, which reads maze.width, maze.height and maze.grid[y][x]
 export const BLOCKED = 0;
@@ -118,17 +118,27 @@ function findSafeSquares(grid, sprites, width, height) {
     });
 }
 
+// One option from each category, each chosen independently of the others
+function pickGravestoneVariant(random) {
+    return Object.fromEntries(Object.entries(GRAVESTONE_VARIANTS).map(([category, options]) => {
+        return [category, options[Math.floor(random() * options.length)]];
+    }));
+}
+
 function createLayout({ width, height, gravestones, obstacles }, random) {
     const grid = [];
     const sprites = []; // Sprite key for each blocked square, null for open squares
+    const gravestoneVariants = []; // { size, color, angle } for each gravestone, null for the rest
     
     for (let y = 0; y < height; y++) {
         grid[y] = [];
         sprites[y] = [];
+        gravestoneVariants[y] = [];
         for (let x = 0; x < width; x++) {
             const isRequired = x % 2 === 1 && y % 2 === 1;
             grid[y][x] = isRequired ? BLOCKED : OPEN;
             sprites[y][x] = isRequired ? 'gravestone' : null;
+            gravestoneVariants[y][x] = isRequired ? pickGravestoneVariant(random) : null;
         }
     }
     
@@ -152,6 +162,7 @@ function createLayout({ width, height, gravestones, obstacles }, random) {
         const { x, y } = safeSquares[Math.floor(random() * safeSquares.length)];
         grid[y][x] = BLOCKED;
         sprites[y][x] = sprite;
+        gravestoneVariants[y][x] = sprite === 'gravestone' ? pickGravestoneVariant(random) : null;
         placedCount++;
     }
     
@@ -169,6 +180,7 @@ function createLayout({ width, height, gravestones, obstacles }, random) {
         height,
         grid,
         sprites,
+        gravestoneVariants,
         entryPoints,
         unplacedGravestones: Math.max(extraGravestones - placedCount, 0),
         unplacedObstacles: Math.min(extras.length - placedCount, obstacles)

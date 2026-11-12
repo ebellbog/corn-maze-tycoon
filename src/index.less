@@ -218,6 +218,45 @@ body {
     }
 }
 
+// Gravestone variants. These fake what real art will eventually do, using the same
+// data-size, data-color and data-angle attributes. Each category only sets its own
+// variable, so any combination works.
+.cell .sprite {
+    transform: rotate(var(--tilt, 0deg)) scale(var(--scale-x, 1), var(--scale-y, 1));
+    transform-origin: 50% 88%; // Where the gravestone meets the ground
+    filter: var(--shade, none);
+
+    &[data-size="narrow"] {
+        --scale-x: 0.7;
+        --scale-y: 1.1;
+    }
+    
+    &[data-size="stout"] {
+        --scale-x: 1.15;
+        --scale-y: 0.7;
+    }
+    
+    &[data-color="normal"] {
+        --shade: brightness(0.75);
+    }
+    
+    &[data-color="dark"] {
+        --shade: brightness(0.4);
+    }
+    
+    &[data-color="light"] {
+        --shade: brightness(1.5);
+    }
+    
+    &[data-angle="left"] {
+        --tilt: -8deg;
+    }
+    
+    &[data-angle="right"] {
+        --tilt: 8deg;
+    }
+}
+
 #digger-avatar {
     position: absolute;
     top: 0;
@@ -250,6 +289,32 @@ body {
 
 #board-wrapper {
     position: relative; // The board clips its contents, so popovers live out here
+}
+
+#tooltip {
+    position: absolute;
+    left: calc((var(--x) + 0.5) * var(--cell-size));
+    top: calc((var(--y) + 1) * var(--cell-size));
+    transform: translate(-50%, 8px);
+    padding: 6px 10px;
+    border-radius: 8px;
+    background-color: rgba(10, 14, 20, 0.92);
+    color: @moonlight;
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    
+    // The little tail pointing up at the gravestone
+    &::after {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-bottom-color: rgba(10, 14, 20, 0.92);
+    }
 }
 
 #popover {

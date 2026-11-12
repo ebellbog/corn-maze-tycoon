@@ -1,14 +1,19 @@
 import './index.less';
 import './mobile.less';
 import { BLOCKED, generateCemetery, getRequiredGravestoneCount, OPEN } from './levelGenerator.js';
-import { createSpriteElement, SPRITES } from './sprites.js';
+import {
+    createSpriteElement,
+    GRAVESTONE_VARIANT_LABELS,
+    GRAVESTONE_VARIANTS,
+    SPRITES
+} from './sprites.js';
 
 const MIN_SIZE = 3;
 const MAX_SIZE = 51;
 const SETTINGS_PANEL_WIDTH = 280;
 const MOVE_DURATION = 150; // Time to cross one square, in ms
 const STORAGE_KEY = 'the-brave-digger';
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2; // Bump when the shape of a saved level changes
 const INVESTIGATE_COST = 3; // Seconds spent investigating a gravestone
 const POPOVER_DURATION = 1500; // How long an investigation message stays up, in ms
 
@@ -67,6 +72,12 @@ class CemeteryGame {
             const cell = $(e.currentTarget);
             this.enterCemetery(cell.data('x'), cell.data('y'));
         });
+        
+        this.board.on('mouseenter', '.cell', (e) => {
+            const cell = $(e.currentTarget);
+            this.showTooltip(cell.data('x'), cell.data('y'));
+        });
+        this.board.on('mouseleave', '.cell', () => this.hideTooltip());
         
         $(window).on('resize', () => this.updateCellSize());
     }
@@ -215,7 +226,12 @@ class CemeteryGame {
             return false;
         }
         
-        const { width, height, grid, sprites, entryPoints } = level;
+        const { width, height, grid, sprites, gravestoneVariants, entryPoints } = level;
+        const isValidVariant = (variant) => {
+            return Object.entries(GRAVESTONE_VARIANTS).every(([category, options]) => {
+                return options.includes(variant[category]);
+            });
+        };
         const isGridOfSize = (rows, isValidCell) => {
             return Array.isArray(rows) && rows.length === height &&
                 rows.every(row => Array.isArray(row) && row.length === width && row.every(isValidCell));
@@ -225,6 +241,10 @@ class CemeteryGame {
             isGridOfSize(grid, cell => cell === OPEN || cell === BLOCKED) &&
             isGridOfSize(sprites, sprite => sprite === null || Boolean(SPRITES[sprite])) &&
             grid.every((row, y) => row.every((cell, x) => (cell === OPEN) === (sprites[y][x] === null))) &&
+            isGridOfSize(gravestoneVariants, variant => variant === null || isValidVariant(variant)) &&
+            sprites.every((row, y) => row.every((sprite, x) => {
+                return (sprite === 'gravestone') === (gravestoneVariants[y][x] !== null);
+            })) &&
             Array.isArray(entryPoints) &&
             entryPoints.every(({ x, y }) => grid[y]?.[x] === OPEN) &&
             [level.unplacedGravestones, level.unplacedObstacles].every(isWholeNumber);
@@ -233,6 +253,7 @@ class CemeteryGame {
     // Starts over on the current layout: back to choosing an entry point, with a full timer
     restart() {
         this.hidePopover();
+        this.hideTooltip();
         this.digger = null;
         this.timeRemaining = this.settings.timeAllowance;
         
@@ -273,14 +294,14 @@ class CemeteryGame {
     }
     
     renderBoard() {
-        const { width, height, grid, sprites, entryPoints } = this.level;
+        const { width, height, grid, sprites, gravestoneVariants, entryPoints } = this.level;
         const cells = [];
         
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const cell = $('<div class="cell">').attr({ 'data-x': x, 'data-y': y });
                 if (grid[y][x] !== OPEN) {
-                    cell.append(createSpriteElement(sprites[y][x]));
+                    cell.append(createSpriteElement(sprites[y][x], gravestoneVariants[y][x]));
                 }
                 cells.push(cell);
             }
@@ -398,6 +419,28 @@ class CemeteryGame {
     hidePopover() {
         clearTimeout(this.popoverTimeout);
         $('#popover').remove();
+    }
+    
+    // Spells out a gravestone's variants below it, in case they're hard to tell apart by sight
+    showTooltip(x, y) {
+        const variant = this.level.gravestoneVariants[y][x];
+        if (!variant) {
+            return;
+        }
+        
+        const tooltip = $('<div id="tooltip">');
+        for (const [category, option] of Object.entries(variant)) {
+            const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1);
+            tooltip.append($('<div>').text(`${categoryLabel}: ${GRAVESTONE_VARIANT_LABELS[category][option]}`));
+        }
+        
+        tooltip[0].style.setProperty('--x', x);
+        tooltip[0].style.setProperty('--y', y);
+        $('#board-wrapper').append(tooltip);
+    }
+    
+    hideTooltip() {
+        $('#tooltip').remove();
     }
     
     isOpen(x, y) {
